@@ -1,0 +1,112 @@
+/* ── Design tokens ───────────────────────────────────────────────────────── */
+
+:root {
+    color-scheme: dark;
+
+    --bg:            #0e1015;
+    --bg-grid:       #171a22;
+    --surface:       #14171e;
+    --surface-2:     #191d26;
+    --surface-3:     #1f2430;
+    --elevated:      #232936;
+    --border:        #262c38;
+    --border-strong: #343b4a;
+
+    --text:    #e8ebf2;
+    --muted:   #8a93a6;
+    --dim:     #5f6879;
+
+    --accent:        #6366f1;
+    --accent-hover:  #7c7ff5;
+    --accent-soft:   #6366f126;
+    --accent-line:   #6366f159;
+    --on-accent:     #ffffff;
+
+    --ok:      #22c55e;
+    --ok-soft: #22c55e1f;
+    --warn:    #f59e0b;
+    --warn-soft:#f59e0b1f;
+    --danger:  #ef4444;
+    --danger-soft:#ef44441f;
+    --info:    #38bdf8;
+
+    /* file kind accents */
+    --k-folder: #7dabf8;
+    --k-php:    #a78bfa;
+    --k-js:     #eab308;
+    --k-html:   #fb7185;
+    --k-css:    #38bdf8;
+    --k-py:     #4ade80;
+    --k-sh:     #94a3b8;
+    --k-sql:    #f472b6;
+    --k-doc:    #cbd5e1;
+    --k-pdf:    #ef4444;
+    --k-word:   #60a5fa;
+    --k-excel:  #22c55e;
+    --k-ppt:    #fb923c;
+    --k-zip:    #f59e0b;
+    --k-img:    #34d399;
+    --k-video:  #c084fc;
+    --k-audio:  #f472b6;
+    --k-font:   #fbbf24;
+    --k-key:    #facc15;
+    --k-default:#7c8496;
+
+    --radius:    10px;
+    --radius-sm: 7px;
+    --radius-lg: 16px;
+    --row-h:     30px;
+
+    --shadow-1: 0 1px 2px #00000040;
+    --shadow-2: 0 6px 20px -6px #00000073, 0 2px 6px #0000004d;
+    --shadow-3: 0 24px 60px -18px #000000a6, 0 4px 12px #00000059;
+
+    --fast:  120ms;
+    --med:   180ms;
+    --ease:  cubic-bezier(.2, .8, .2, 1);
+
+    --font: "Inter", "Sarabun", -apple-system, BlinkMacSystemFont, "Segoe UI",
+            "Noto Sans Thai", Roboto, Helvetica, Arial, sans-serif;
+    --mono: ui-monospace, "SFMono-Regular", "JetBrains Mono", "Cascadia Code",
+            Menlo, Consolas, monospace;
+
+    --topbar-h:  52px;
+    --sidebar-w: 236px;
+    --rail-w:    58px;
+}
+
+:root[data-theme="light"] {
+    color-scheme: light;
+
+    --bg:            #eef0f4;
+    --bg-grid:       #e4e7ee;
+    --surface:       #ffffff;
+    --surface-2:     #f5f6f9;
+    --surface-3:     #eceef3;
+    --elevated:      #ffffff;
+    --border:        #e0e3ea;
+    --border-strong: #c9ced9;
+
+    --text:  #171a21;
+    --muted: #626d84;
+    --dim:   #8b94a6;
+
+    --accent-soft: #6366f11a;
+    --accent-line: #6366f14d;
+
+    --k-folder: #3b82f6;
+    --k-doc:    #64748b;
+    --k-sh:     #64748b;
+    --k-default:#7c8496;
+
+    --shadow-1: 0 1px 2px #0f172a14;
+    --shadow-2: 0 8px 24px -8px #0f172a2e, 0 2px 6px #0f172a14;
+    --shadow-3: 0 24px 60px -20px #0f172a3d, 0 4px 12px #0f172a1a;
+}
+
+@media (prefers-reduced-motion: reduce) {
+    *, *::before, *::after {
+        animation-duration: .01ms !important;
+        transition-duration: .01ms !important;
+    }
+}

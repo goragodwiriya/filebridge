@@ -1,0 +1,28 @@
+{
+    "name": "goragod/filebridge",
+    "description": "Two-panel web console for copying files between servers over SFTP, FTP and FTPS. Plain PHP, vanilla JavaScript, no build step.",
+    "type": "project",
+    "license": "MIT",
+    "keywords": ["sftp", "ftp", "ftps", "file-manager", "file-transfer", "ssh", "php"],
+    "require": {
+        "php": ">=8.2",
+        "ext-json": "*",
+        "ext-mbstring": "*",
+        "ext-sodium": "*",
+        "phpseclib/phpseclib": "^3.0"
+    },
+    "suggest": {
+        "ext-ssh2": "Faster SFTP backend (libssh2). Without it the pure PHP phpseclib backend is used.",
+        "ext-ftp": "Required for the FTP and FTPS connections.",
+        "ext-zip": "Required to download folders and multi-file selections as a zip archive."
+    },
+    "autoload": {
+        "psr-4": {
+            "FileBridge\\": "src/"
+        }
+    },
+    "config": {
+        "optimize-autoloader": true,
+        "sort-packages": true
+    }
+}

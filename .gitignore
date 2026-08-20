@@ -1,0 +1,24 @@
+# Dependencies
+/vendor/
+
+# Generated on first run - these hold credentials, never commit them
+/config/key.php
+/config/users.php
+/config/sites.json
+/config/config.local.php
+
+# Runtime state
+/storage/known_hosts.json
+/storage/jobs/*
+/storage/logs/*
+/storage/sessions/*
+/storage/tmp/*
+!/storage/*/.gitkeep
+
+# OS and editors
+.DS_Store
+Thumbs.db
+*.swp
+*~
+/.idea/
+/.vscode/
