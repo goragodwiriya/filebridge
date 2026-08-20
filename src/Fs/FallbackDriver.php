@@ -60,6 +60,12 @@ final class FallbackDriver implements DriverInterface, ExecCapable
         $this->active = null;
     }
 
+    /** The backend that won, or null while nothing has connected yet. */
+    public function active(): ?DriverInterface
+    {
+        return $this->active;
+    }
+
     public function list(string $path): array
     {
         return $this->driver()->list($path);

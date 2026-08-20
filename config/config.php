@@ -21,6 +21,7 @@ return [
 
     // Transfer engine
     'chunk_size'        => 262144,   // 256 KB per read/write chunk
+    'transfer_workers'  => 4,        // files copied in parallel per job (1 = one at a time)
     'max_edit_size'     => 2097152,  // 2 MB - largest file openable in the text editor
     'max_upload_size'   => 0,        // 0 = use PHP's upload_max_filesize
     'job_retention'     => 86400,    // seconds to keep finished jobs on disk

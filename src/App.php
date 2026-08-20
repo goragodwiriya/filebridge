@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace FileBridge;
 
+use FileBridge\Fs\Stream;
 use FileBridge\Security\Auth;
 use FileBridge\Security\Crypto;
 use FileBridge\Security\HostKeyStore;
@@ -38,6 +39,7 @@ final class App
             $config = array_merge($config, (array) require $local);
         }
         $this->config = $config;
+        Stream::useChunkSize((int) ($config['chunk_size'] ?? Stream::DEFAULT_CHUNK));
         $this->ensureStorage();
     }
 

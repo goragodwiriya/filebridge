@@ -17,6 +17,9 @@ use Throwable;
 /** Queues transfers and, inside the worker process, actually performs them. */
 final class TransferManager
 {
+    /** @var null|callable(Job):void progress sink; null means the job file */
+    private $sink = null;
+
     private float $lastFlush = 0.0;
     private float $windowStart = 0.0;
     private int $windowBytes = 0;
@@ -152,7 +155,13 @@ final class TransferManager
             $job->status = Job::RUNNING;
             $store->put($job);
 
-            $this->execute($job, $plan, $src, $dst, $store);
+            // Directories first, in one process: shards must never race here.
+            $this->prepareDirs($job, $plan, $dst);
+
+            $workers = $this->workerCount(count($plan['files']));
+            if ($workers < 2 || !$this->runParallel($job, $plan['files'], $src, $dst, $store, $workers)) {
+                $this->execute($job, $plan['files'], $src, $dst, $store);
+            }
 
             if ($this->cancelled) {
                 $this->finishCancelled($job, $store);
@@ -302,7 +311,7 @@ final class TransferManager
         }
     }
 
-    private function execute(Job $job, array $plan, DriverInterface $src, DriverInterface $dst, JobStore $store): void
+    private function prepareDirs(Job $job, array $plan, DriverInterface $dst): void
     {
         foreach ($plan['dirs'] as $dir) {
             $dst->mkdir($dir);
@@ -310,11 +319,15 @@ final class TransferManager
         if ($plan['dirs'] === [] && $plan['files'] !== []) {
             $dst->mkdir($job->targetPath);
         }
+    }
 
+    /** @param array<int,array{src:string,dst:string,size:int,mtime:int}> $files */
+    private function execute(Job $job, array $files, DriverInterface $src, DriverInterface $dst, JobStore $store): void
+    {
         $this->windowStart = microtime(true);
         $this->windowBytes = 0;
 
-        foreach ($plan['files'] as $file) {
+        foreach ($files as $file) {
             if ($this->checkCancelled($job)) {
                 return;
             }
@@ -329,7 +342,7 @@ final class TransferManager
                 $job->filesSkipped++;
                 $job->filesDone++;
                 $job->bytesDone += $file['size'];
-                $store->put($job);
+                $this->save($job, $store);
                 continue;
             }
 
@@ -363,6 +376,266 @@ final class TransferManager
             $job->bytesDone = $baseline + max($file['size'], $job->currentBytes);
             $this->flush($job, $store, true);
         }
+    }
+
+    // -------------------------------------------------------- parallel workers
+
+    /**
+     * Hand the file list to a pool of worker processes.
+     *
+     * One file at a time is fine on a LAN, but over a long link every file costs
+     * a fixed round trip that no chunk size can remove - the only way to hide it
+     * is to keep several files in flight. Returns false when the pool cannot be
+     * started, so the caller can still copy in this process.
+     *
+     * @param array<int,array{src:string,dst:string,size:int,mtime:int}> $files
+     */
+    private function runParallel(
+        Job $job,
+        array $files,
+        DriverInterface $src,
+        DriverInterface $dst,
+        JobStore $store,
+        int $workers
+    ): bool {
+        $buckets = $this->shareOut($files, $workers);
+        $workers = count($buckets);
+        $store->putPlan($job->id, $buckets);
+
+        $procs = [];
+        for ($i = 0; $i < $workers; $i++) {
+            $handle = $this->spawnShard($job->id, $i, $workers);
+            if ($handle === null) {
+                foreach ($procs as $started) {
+                    @proc_terminate($started);
+                    @proc_close($started);
+                }
+                $store->clearParts($job->id);
+                $job->note('Could not start the worker pool - copying in this process instead.', 'warn');
+
+                return false;
+            }
+            $procs[] = $handle;
+        }
+
+        // The shards hold their own connections now; ours would only idle out.
+        $src->disconnect();
+        $dst->disconnect();
+
+        $job->note(sprintf('Copying %d file(s) across %d workers.', count($files), $workers));
+        $store->put($job);
+
+        $this->supervise($job, $store, $procs, $workers);
+
+        return true;
+    }
+
+    /** One slice of a job: copies its own bucket, reports into its own file. */
+    public function runShard(string $jobId, int $index, int $count): void
+    {
+        $store = $this->app->jobs();
+        $job   = $store->getOrFail($jobId);
+        $files = $store->plan($jobId)[$index] ?? [];
+        if ($files === []) {
+            $store->putPart($jobId, $index, ['status' => 'done']);
+
+            return;
+        }
+
+        // Counters are per shard from here; the coordinator adds them up.
+        $job->filesDone    = 0;
+        $job->filesSkipped = 0;
+        $job->bytesDone    = 0;
+        $job->log          = [];
+        $this->sink = static function (Job $shard) use ($store, $jobId, $index): void {
+            $store->putPart($jobId, $index, ['status' => 'running'] + $shard->toArray());
+        };
+
+        $factory = new DriverFactory($this->app);
+        $src = $dst = null;
+
+        try {
+            $src = $factory->connect($this->app->sites()->findOrFail($job->sourceSite), true);
+            $dst = $job->sourceSite === $job->targetSite
+                ? $src
+                : $factory->connect($this->app->sites()->findOrFail($job->targetSite), true);
+
+            $this->execute($job, $files, $src, $dst, $store);
+
+            $store->putPart($jobId, $index, [
+                'status' => $this->cancelled ? 'cancelled' : 'done',
+            ] + $job->toArray());
+        } catch (Throwable $e) {
+            $store->putPart($jobId, $index, [
+                'status' => 'error',
+                'error'  => $e->getMessage(),
+            ] + $job->toArray());
+            $this->app->logger()->error('transfer shard failed', [
+                'job' => $jobId, 'shard' => $index, 'error' => $e->getMessage(),
+            ]);
+
+            throw $e;
+        } finally {
+            $src?->disconnect();
+            if ($dst !== null && $dst !== $src) {
+                $dst->disconnect();
+            }
+        }
+    }
+
+    /** @param array<int,resource> $procs */
+    private function supervise(Job $job, JobStore $store, array $procs, int $workers): void
+    {
+        $interval = max(0.1, (float) $this->app->config['progress_interval']);
+        $exits    = [];
+
+        while (true) {
+            $running = false;
+            foreach ($procs as $i => $proc) {
+                $status = proc_get_status($proc);
+                if ($status['running']) {
+                    $running = true;
+                } elseif (!array_key_exists($i, $exits)) {
+                    // Only the first look after exit carries the real code.
+                    $exits[$i] = (int) $status['exitcode'];
+                }
+            }
+            $this->collect($job, $store, $workers);
+            $this->checkCancelled($job); // the shards watch the same marker
+            if (!$running) {
+                break;
+            }
+            usleep((int) ($interval * 1000000));
+        }
+
+        foreach ($procs as $proc) {
+            @proc_close($proc);
+        }
+        $this->collect($job, $store, $workers, true);
+
+        $failure = null;
+        for ($i = 0; $i < $workers; $i++) {
+            $part = $store->part($job->id, $i);
+            if ((string) ($part['error'] ?? '') !== '') {
+                $failure = (string) $part['error'];
+                break;
+            }
+            if (($exits[$i] ?? 0) !== 0 && ($part['status'] ?? '') !== 'cancelled') {
+                $failure = sprintf('Worker %d stopped unexpectedly (exit code %d).', $i + 1, $exits[$i] ?? -1);
+                break;
+            }
+        }
+        $store->clearParts($job->id);
+
+        if ($failure !== null && !$this->cancelled) {
+            throw new RuntimeException($failure);
+        }
+    }
+
+    /** Add the shards' counters up into the job the UI polls. */
+    private function collect(Job $job, JobStore $store, int $workers, bool $final = false): void
+    {
+        $files = $bytes = $skipped = 0;
+        $speed = 0.0;
+        $job->current      = '';
+        $job->currentBytes = 0;
+        $job->currentTotal = 0;
+
+        for ($i = 0; $i < $workers; $i++) {
+            $part = $store->part($job->id, $i);
+            if ($part === null) {
+                continue;
+            }
+            $files   += (int) ($part['filesDone'] ?? 0);
+            $bytes   += (int) ($part['bytesDone'] ?? 0);
+            $skipped += (int) ($part['filesSkipped'] ?? 0);
+            $speed   += (float) ($part['speed'] ?? 0);
+            if ($job->current === '' && (string) ($part['current'] ?? '') !== '') {
+                $job->current      = (string) $part['current'];
+                $job->currentBytes = (int) ($part['currentBytes'] ?? 0);
+                $job->currentTotal = (int) ($part['currentTotal'] ?? 0);
+            }
+            if ($final) {
+                foreach ((array) ($part['log'] ?? []) as $entry) {
+                    // Only the shards' warnings are worth repeating in the job log.
+                    if (is_array($entry) && (string) ($entry['level'] ?? 'info') !== 'info') {
+                        $job->note((string) ($entry['message'] ?? ''), (string) $entry['level']);
+                    }
+                }
+            }
+        }
+
+        $job->filesDone    = $files;
+        $job->bytesDone    = $bytes;
+        $job->filesSkipped = $skipped;
+        $job->speed        = $speed;
+        $job->eta          = $speed > 1 ? (int) round(max(0, $job->bytesTotal - $bytes) / $speed) : 0;
+        $store->put($job);
+    }
+
+    /**
+     * Deal the files out heaviest first, always onto the lightest worker. Empty
+     * files still cost a round trip, so nobody is handed a free ride.
+     *
+     * Files aiming at the same destination stay together: "keep both" picks the
+     * next free name by looking at the target, and two workers looking at once
+     * would settle on the very same name.
+     *
+     * @param  array<int,array{src:string,dst:string,size:int,mtime:int}> $files
+     * @return array<int,array<int,array{src:string,dst:string,size:int,mtime:int}>>
+     */
+    private function shareOut(array $files, int $workers): array
+    {
+        $groups = [];
+        $weight = [];
+        foreach ($files as $file) {
+            $groups[$file['dst']][] = $file;
+            $weight[$file['dst']] = ($weight[$file['dst']] ?? 0) + max(65536, (int) $file['size']);
+        }
+        arsort($weight);
+
+        $buckets = array_fill(0, $workers, []);
+        $load    = array_fill(0, $workers, 0);
+        foreach (array_keys($weight) as $destination) {
+            $lightest = (int) array_search(min($load), $load, true);
+            foreach ($groups[$destination] as $file) {
+                $buckets[$lightest][] = $file;
+            }
+            $load[$lightest] += $weight[$destination];
+        }
+
+        return array_values(array_filter($buckets, static fn (array $bucket): bool => $bucket !== []));
+    }
+
+    /** @return resource|null */
+    private function spawnShard(string $jobId, int $index, int $count)
+    {
+        $php = $this->app->phpBinary();
+        if ($php === null || !function_exists('proc_open')) {
+            return null;
+        }
+        // A real process handle, unlike spawn(): the coordinator needs the exit code.
+        $handle = @proc_open(
+            [$php, $this->app->base . '/worker.php', $jobId, (string) $index, (string) $count],
+            [
+                0 => ['file', '/dev/null', 'r'],
+                1 => ['file', '/dev/null', 'w'],
+                2 => ['file', $this->app->base . '/storage/logs/worker.log', 'a'],
+            ],
+            $pipes
+        );
+
+        return is_resource($handle) ? $handle : null;
+    }
+
+    private function workerCount(int $files): int
+    {
+        $configured = (int) ($this->app->config['transfer_workers'] ?? 1);
+        if ($configured < 2 || $files < 2 || !function_exists('proc_open') || $this->app->phpBinary() === null) {
+            return 1;
+        }
+
+        return min($configured, $files, 16);
     }
 
     /** @return string|null destination path, or null to skip this file */
@@ -447,6 +720,16 @@ final class TransferManager
         $remaining  = max(0, $job->bytesTotal - $job->bytesDone);
         $job->eta   = $job->speed > 1 ? (int) round($remaining / $job->speed) : 0;
         $this->lastFlush = $now;
+        $this->save($job, $store);
+    }
+
+    private function save(Job $job, JobStore $store): void
+    {
+        if ($this->sink !== null) {
+            ($this->sink)($job);
+
+            return;
+        }
         $store->put($job);
     }
 }

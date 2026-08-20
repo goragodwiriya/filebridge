@@ -47,8 +47,7 @@ final class JobStore
     {
         $file = $this->file($job->id);
         $tmp  = $file . '.' . getmypid() . '.tmp';
-        $json = json_encode($job->toArray(), JSON_UNESCAPED_SLASHES | JSON_UNESCAPED_UNICODE);
-        if (@file_put_contents($tmp, $json) === false) {
+        if (@file_put_contents($tmp, $this->encode($job->toArray())) === false) {
             throw new RuntimeException('Cannot write job file: ' . $file);
         }
         @rename($tmp, $file); // atomic: readers never see a half written document
@@ -93,6 +92,65 @@ final class JobStore
     {
         @unlink($this->file($id));
         $this->clearCancel($id);
+        $this->clearParts($id);
+    }
+
+    // ------------------------------------------------- parallel worker scratch
+
+    /**
+     * The file list each shard worker is responsible for.
+     *
+     * @param array<int,array<int,array{src:string,dst:string,size:int,mtime:int}>> $buckets
+     */
+    public function putPlan(string $id, array $buckets): void
+    {
+        $file = $this->scratch($id, 'plan');
+        if (@file_put_contents($file, $this->encode($buckets)) === false) {
+            throw new RuntimeException('Cannot write plan file: ' . $file);
+        }
+    }
+
+    /** @return array<int,array<int,array{src:string,dst:string,size:int,mtime:int}>> */
+    public function plan(string $id): array
+    {
+        $data = json_decode((string) @file_get_contents($this->scratch($id, 'plan')), true);
+
+        return is_array($data) ? $data : [];
+    }
+
+    /** One shard's progress. Written by the shard, read by the coordinator. */
+    public function putPart(string $id, int $index, array $data): void
+    {
+        $file = $this->scratch($id, 'p' . $index);
+        $tmp  = $file . '.' . getmypid() . '.tmp';
+        if (@file_put_contents($tmp, $this->encode($data)) !== false) {
+            @rename($tmp, $file);
+        }
+    }
+
+    public function part(string $id, int $index): ?array
+    {
+        $data = json_decode((string) @file_get_contents($this->scratch($id, 'p' . $index)), true);
+
+        return is_array($data) ? $data : null;
+    }
+
+    public function clearParts(string $id): void
+    {
+        foreach (glob($this->dir . '/' . $this->safe($id) . '.*.part*') ?: [] as $file) {
+            @unlink($file);
+        }
+    }
+
+    /** Never *.json: all() globs that pattern and must only ever see real jobs. */
+    private function scratch(string $id, string $kind): string
+    {
+        return $this->dir . '/' . $this->safe($id) . '.' . $kind . '.part';
+    }
+
+    private function encode(array $data): string
+    {
+        return (string) json_encode($data, JSON_UNESCAPED_SLASHES | JSON_UNESCAPED_UNICODE);
     }
 
     /** Remove finished jobs older than the retention window. */

@@ -74,7 +74,7 @@ export function siteDialog(existing = null) {
             passive: el('input', { type: 'checkbox', checked: data.passive !== false }),
             backend: el('select', { class: 'select' },
                 el('option', { value: 'auto', selected: data.backend === 'auto' }, 'Automatic (recommended)'),
-                el('option', { value: 'ssh2', selected: data.backend === 'ssh2' }, 'ext-ssh2 only (fastest)'),
+                el('option', { value: 'ssh2', selected: data.backend === 'ssh2' }, 'ext-ssh2 (fastest transfers)'),
                 el('option', { value: 'phpseclib', selected: data.backend === 'phpseclib' }, 'phpseclib only (no extension)')),
         };
 
@@ -119,7 +119,8 @@ export function siteDialog(existing = null) {
         }
 
         const ftpRow = el('label', { class: 'switch' }, inputs.passive, el('span', { class: 'track' }), 'Passive mode (recommended behind NAT)');
-        const sftpRows = el('div', { class: 'field' }, el('label', { text: 'SSH backend' }), inputs.backend);
+        const sftpRows = el('div', { class: 'field' }, el('label', { text: 'SSH backend' }), inputs.backend,
+            el('span', { class: 'hint' }, 'Applies to file transfers. Folder listings always use phpseclib, which fetches a whole directory in one request.'));
 
         const defaultPort = (protocol) => PROTOCOLS.find(([value]) => value === protocol)?.[2] ?? 22;
         let lastProtocol = data.protocol || 'sftp';

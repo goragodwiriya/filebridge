@@ -14,20 +14,24 @@ final class DriverFactory
     {
     }
 
-    public function make(Site $site): DriverInterface
+    /**
+     * @param bool $bulk true for a connection that only moves file contents, so
+     *                   it skips the listing backend and its extra connection
+     */
+    public function make(Site $site, bool $bulk = false): DriverInterface
     {
         return match ($site->protocol) {
             'local' => $this->local($site),
             'ftp'   => $this->ftp($site, false),
             'ftps'  => $this->ftp($site, true),
-            default => $this->sftp($site),
+            default => $this->sftp($site, $bulk),
         };
     }
 
     /** Build and connect, mapping any failure to a readable message. */
-    public function connect(Site $site): DriverInterface
+    public function connect(Site $site, bool $bulk = false): DriverInterface
     {
-        $driver = $this->make($site);
+        $driver = $this->make($site, $bulk);
         $driver->connect();
 
         return $driver;
@@ -66,7 +70,7 @@ final class DriverFactory
      * ext-ssh2 first when it is installed and the profile allows it; if that
      * backend cannot connect we retry on phpseclib rather than failing outright.
      */
-    private function sftp(Site $site): DriverInterface
+    private function sftp(Site $site, bool $bulk = false): DriverInterface
     {
         $preferExt = $site->backend === 'ssh2'
             || ($site->backend === 'auto' && SftpSsh2Driver::available());
@@ -84,11 +88,15 @@ final class DriverFactory
                 hostKeys: $this->app->hostKeys(),
                 verifyHostKey: (bool) $this->app->config['verify_host_key']
             );
-            if ($site->backend === 'ssh2') {
-                return $driver;
-            }
+            $primary = $site->backend === 'ssh2'
+                ? $driver
+                : new FallbackDriver($driver, fn (): DriverInterface => $this->seclib($site));
 
-            return new FallbackDriver($driver, fn (): DriverInterface => $this->seclib($site));
+            // Moving bytes wants libssh2 alone; browsing gets phpseclib's batched
+            // directory listing in front of it.
+            return $bulk
+                ? $primary
+                : new HybridDriver($primary, fn (): DriverInterface => $this->seclib($site));
         }
 
         return $this->seclib($site);

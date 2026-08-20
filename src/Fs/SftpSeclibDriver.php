@@ -8,7 +8,7 @@ use FileBridge\Security\HostKeyStore;
 use phpseclib3\Crypt\Common\PrivateKey;
 use phpseclib3\Crypt\PublicKeyLoader;
 use phpseclib3\Net\SFTP;
-use phpseclib3\Net\SFTP\Stream;
+use phpseclib3\Net\SFTP\Stream as SftpStream;
 use Throwable;
 
 /**
@@ -160,8 +160,18 @@ final class SftpSeclibDriver implements DriverInterface, ExecCapable
 
     public function mkdir(string $path): void
     {
-        if (!$this->handle()->mkdir(Path::normalise($path), -1, true)) {
-            throw new FsException('Cannot create directory: ' . $path);
+        $sftp = $this->handle();
+        $path = Path::normalise($path);
+        // An existing directory is success, not a failure - a transfer often
+        // writes into folders that are already there.
+        if ($sftp->is_dir($path)) {
+            return;
+        }
+        if (!$sftp->mkdir($path, -1, true)) {
+            $sftp->clearStatCache();
+            if (!$sftp->is_dir($path)) {
+                throw new FsException('Cannot create directory: ' . $path);
+            }
         }
     }
 
@@ -193,6 +203,7 @@ final class SftpSeclibDriver implements DriverInterface, ExecCapable
         if (!is_resource($handle)) {
             throw new FsException('Cannot read: ' . $path);
         }
+        Stream::prepare($handle);
 
         return $handle;
     }
@@ -312,7 +323,7 @@ final class SftpSeclibDriver implements DriverInterface, ExecCapable
     {
         if (!self::$wrapperRegistered) {
             if (!in_array('sftp', stream_get_wrappers(), true)) {
-                Stream::register('sftp');
+                SftpStream::register('sftp');
             }
             self::$wrapperRegistered = true;
         }

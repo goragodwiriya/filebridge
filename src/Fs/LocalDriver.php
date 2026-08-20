@@ -138,6 +138,7 @@ final class LocalDriver implements DriverInterface
         if ($handle === false) {
             throw new FsException('Cannot read: ' . $path);
         }
+        Stream::prepare($handle);
 
         return $handle;
     }
@@ -152,8 +153,11 @@ final class LocalDriver implements DriverInterface
         if ($offset > 0) {
             fseek($out, $offset);
         }
-        stream_copy_to_stream($handle, $out);
-        fclose($out);
+        try {
+            Stream::copy($handle, $out);
+        } finally {
+            fclose($out);
+        }
     }
 
     public function realpath(string $path): string

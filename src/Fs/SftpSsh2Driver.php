@@ -170,7 +170,13 @@ final class SftpSsh2Driver implements DriverInterface, ExecCapable
     public function mkdir(string $path): void
     {
         $this->connect();
-        if (!@ssh2_sftp_mkdir($this->sftp, Path::normalise($path), 0755, true)) {
+        $path = Path::normalise($path);
+        // An existing directory is success, not a failure - a transfer often
+        // writes into folders that are already there.
+        if ($this->isDir($path)) {
+            return;
+        }
+        if (!@ssh2_sftp_mkdir($this->sftp, $path, 0755, true) && !$this->isDir($path)) {
             throw new FsException('Cannot create directory: ' . $path);
         }
     }
@@ -179,10 +185,8 @@ final class SftpSsh2Driver implements DriverInterface, ExecCapable
     {
         $this->connect();
         $path = Path::normalise($path);
-        $stat = @ssh2_sftp_stat($this->sftp, $path);
-        $isDir = is_array($stat) && ((int) ($stat['mode'] ?? 0) & 0170000) === 0040000;
 
-        if (!$isDir) {
+        if (!$this->isDir($path)) {
             if (!@ssh2_sftp_unlink($this->sftp, $path)) {
                 throw new FsException('Cannot delete: ' . $path);
             }
@@ -197,6 +201,13 @@ final class SftpSsh2Driver implements DriverInterface, ExecCapable
         if (!@ssh2_sftp_rmdir($this->sftp, $path)) {
             throw new FsException('Cannot delete directory: ' . $path);
         }
+    }
+
+    private function isDir(string $path): bool
+    {
+        $stat = @ssh2_sftp_stat($this->sftp, $path);
+
+        return is_array($stat) && ((int) ($stat['mode'] ?? 0) & 0170000) === 0040000;
     }
 
     public function rename(string $from, string $to): void
@@ -222,6 +233,7 @@ final class SftpSsh2Driver implements DriverInterface, ExecCapable
         if (!is_resource($handle)) {
             throw new FsException('Cannot read: ' . $path);
         }
+        Stream::prepare($handle);
 
         return $handle;
     }
@@ -237,8 +249,11 @@ final class SftpSsh2Driver implements DriverInterface, ExecCapable
         if ($offset > 0) {
             fseek($out, $offset);
         }
-        stream_copy_to_stream($handle, $out);
-        fclose($out);
+        try {
+            Stream::copy($handle, $out);
+        } finally {
+            fclose($out);
+        }
     }
 
     public function realpath(string $path): string

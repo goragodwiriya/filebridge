@@ -220,6 +220,9 @@ final class Api
             $driver->connect();
             $home = $driver->home();
             $list = $driver->list($home);
+            // Browsing and transferring can sit on different backends: touch the
+            // transfer side too so the test covers what a real job would use.
+            $driver->stat($home);
         } finally {
             // A failed test must still release the connection and any key
             // material the driver had to stage on disk.

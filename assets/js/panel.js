@@ -30,6 +30,7 @@ export class Panel {
         this.showHidden = Boolean(state.settings.showHidden);
         this.capabilities = {};
         this.rendered = 0;
+        this.ticket = 0;
 
         this.build();
     }
@@ -93,6 +94,8 @@ export class Panel {
 
     async load(path = '', options = {}) {
         const requested = path;
+        // A slow listing must never paint over a folder opened after it.
+        const ticket = ++this.ticket;
         this.setBusy(true);
         if (!options.keepSelection) this.selected.clear();
         this.el.state.replaceChildren(skeleton());
@@ -100,6 +103,7 @@ export class Panel {
 
         try {
             const data = await call('fs.list', { site: this.siteId, path: requested });
+            if (ticket !== this.ticket) return;
             this.path = data.path;
             this.entries = data.entries;
             this.capabilities = data.capabilities;
@@ -113,6 +117,7 @@ export class Panel {
             this.renderCrumbs();
             this.refreshView();
         } catch (error) {
+            if (ticket !== this.ticket) return;
             this.el.dot.className = 'dot dot-danger';
             this.entries = [];
             this.view = [];
@@ -121,7 +126,7 @@ export class Panel {
             this.renderCrumbs();
             this.updateFoot();
         } finally {
-            this.setBusy(false);
+            if (ticket === this.ticket) this.setBusy(false);
         }
     }
 
