@@ -460,12 +460,16 @@ export class Panel {
         window.location.href = downloadUrl(this.siteId, entries.map((entry) => entry.path));
     }
 
-    /** Opens the image viewer, with the folder's other images alongside it. */
+    /**
+     * Opens the image viewer. It gets the whole listing, not just the images:
+     * stepping through the folder then skips anything it cannot draw instead of
+     * closing on a file that would have to be handled some other way.
+     */
     preview(entry) {
-        const images = this.view.filter((item) => item.image);
-        const index = images.findIndex((item) => item.path === entry.path);
+        const files = this.view.filter((item) => !item.isDir);
+        const index = files.findIndex((item) => item.path === entry.path);
 
-        return imageDialog(this.siteId, index < 0 ? [entry] : images, Math.max(index, 0), {
+        return imageDialog(this.siteId, index < 0 ? [entry] : files, Math.max(index, 0), {
             onEdit: (file) => this.edit(file),
         });
     }
@@ -616,7 +620,7 @@ export class Panel {
 
         contextMenu(event.clientX, event.clientY, [
             { label: many ? `${chosen.length} items selected` : entry.name, header: true },
-            { label: openLabel, icon: openIcon, disabled: many, onSelect: () => this.open(entry), key: 'F3' },
+            { label: openLabel, icon: openIcon, disabled: many, onSelect: () => this.open(entry), key: entry.image ? 'F3' : null },
             { label: `Copy to ${other?.siteLabel() || 'other panel'}`, icon: this.side === 'left' ? 'arrow-right' : 'arrow-left', onSelect: () => this.ctx.copyToOther(this, 'copy'), key: 'F5' },
             { label: 'Move to the other panel', icon: 'swap', onSelect: () => this.ctx.copyToOther(this, 'move'), key: 'F6' },
             'sep',

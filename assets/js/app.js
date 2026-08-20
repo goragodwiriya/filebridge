@@ -440,7 +440,14 @@ function wireKeyboard() {
                 if (cursorEntry) { event.preventDefault(); panel.rename(cursorEntry); }
                 break;
             case event.key === 'F3':
-                if (cursorEntry) { event.preventDefault(); panel.open(cursorEntry); }
+                if (cursorEntry) {
+                    event.preventDefault();
+                    // View stays view: a file the viewer cannot draw says so
+                    // rather than starting a download and closing everything.
+                    if (cursorEntry.isDir) panel.load(cursorEntry.path);
+                    else if (cursorEntry.editable && !cursorEntry.image) panel.edit(cursorEntry);
+                    else panel.preview(cursorEntry);
+                }
                 break;
             case event.key === 'F4':
                 if (cursorEntry?.editable) { event.preventDefault(); panel.edit(cursorEntry); }

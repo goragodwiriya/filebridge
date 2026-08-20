@@ -934,14 +934,19 @@ table.files tbody tr.is-drop-target td {
 .viewer-note {
     display: none;
     margin: auto;
+    padding: 0 24px;
+    text-align: center;
     color: var(--muted);
     font-size: 12.5px;
 }
 .viewer-stage.is-broken .viewer-img,
-.viewer-stage.is-broken::after {
+.viewer-stage.is-blocked .viewer-img,
+.viewer-stage.is-broken::after,
+.viewer-stage.is-blocked::after {
     display: none;
 }
-.viewer-stage.is-broken .viewer-note {
+.viewer-stage.is-broken .viewer-note,
+.viewer-stage.is-blocked .viewer-note {
     display: block;
 }
 /* The viewer footer carries more buttons than the other dialogs do. */

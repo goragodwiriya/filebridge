@@ -11,7 +11,18 @@ $app->startSession();
 
 $appName = htmlspecialchars((string) $app->config['app_name'], ENT_QUOTES);
 $theme   = htmlspecialchars((string) $app->config['default_theme'], ENT_QUOTES);
-$version = '1.1';
+$version = '1.2';
+
+// One version for every module the browser loads. app.js carries the query in
+// its script tag; the import map hands the same one to everything app.js pulls
+// in - without it those files keep their plain URLs and a browser can end up
+// running a fresh module against a cached copy of another, which fails to link
+// and leaves a blank page.
+$modules = ['api', 'app', 'dialogs', 'panel', 'transfer', 'ui'];
+$imports = [];
+foreach ($modules as $module) {
+    $imports['./assets/js/' . $module . '.js'] = './assets/js/' . $module . '.js?v=' . $version;
+}
 ?>
 <!doctype html>
 <html lang="en" data-theme="<?= $theme ?>">
@@ -25,6 +36,7 @@ $version = '1.1';
 <link rel="stylesheet" href="assets/css/tokens.css?v=<?= $version ?>">
 <link rel="stylesheet" href="assets/css/components.css?v=<?= $version ?>">
 <link rel="stylesheet" href="assets/css/layout.css?v=<?= $version ?>">
+<script type="importmap"><?= json_encode(['imports' => $imports], JSON_UNESCAPED_SLASHES) ?></script>
 <script>
     // Apply the stored theme before first paint so there is no flash.
     try {

@@ -366,12 +366,17 @@ export function editorDialog(file, content, onSave) {
 const ZOOM_STEPS = [0.1, 0.2, 0.33, 0.5, 0.75, 1, 1.5, 2, 3, 4, 6, 8];
 
 /**
- * Shows one image and steps through the rest of the folder with the arrow keys.
+ * Shows one image, with the rest of the listing reachable through ← / →.
+ * Navigation only ever stops on images: a text file or an archive in between is
+ * stepped over, and a non-image opened here says so instead of handing the file
+ * to some other action, which would drop the viewer out from under the reader.
+ *
  * The bytes come from download.php?inline=1 and are only ever painted into an
  * <img>, never framed - the note in download.php explains why that matters.
  */
-export function imageDialog(siteId, images, index = 0, { onEdit } = {}) {
-    let at = Math.max(0, Math.min(index, images.length - 1));
+export function imageDialog(siteId, files, index = 0, { onEdit } = {}) {
+    const images = files.filter((file) => file.image);
+    let at = Math.max(0, Math.min(index, files.length - 1));
     let scale = 0; // 0 means "whatever fits the stage"
     let head = null;
     let box = null;
@@ -379,10 +384,10 @@ export function imageDialog(siteId, images, index = 0, { onEdit } = {}) {
 
     const opened = modal((close) => {
         const img = el('img', { class: 'viewer-img', alt: '', draggable: 'false' });
-        const note = el('p', { class: 'viewer-note', text: 'This image could not be displayed.' });
-        const stage = el('div', { class: 'viewer-stage is-loading' }, img, note);
+        const note = el('p', { class: 'viewer-note' });
+        const stage = el('div', { class: 'viewer-stage' }, img, note);
         const meta = el('span', { class: 'hint' });
-        const current = () => images[at];
+        const current = () => files[at];
 
         const zoomLabel = el('button', {
             class: 'btn btn-sm mono',
@@ -390,6 +395,9 @@ export function imageDialog(siteId, images, index = 0, { onEdit } = {}) {
             style: { minWidth: '64px', justifyContent: 'center' },
             onclick: () => apply(scale === 1 ? 0 : 1),
         });
+        const zoomOut = el('button', { class: 'icon-btn', title: 'Zoom out (−)', onclick: () => step(-1) }, icon('minus'));
+        const zoomIn = el('button', { class: 'icon-btn', title: 'Zoom in (+)', onclick: () => step(1) }, icon('plus'));
+        const zoomFit = el('button', { class: 'icon-btn', title: 'Fit to the window (F)', onclick: () => apply(0) }, icon('fit'));
         const saveLink = el('a', { class: 'btn' }, icon('download', 'icon icon-sm'), 'Download');
         const editButton = el('button', {
             class: 'btn',
@@ -413,6 +421,7 @@ export function imageDialog(siteId, images, index = 0, { onEdit } = {}) {
         }
 
         function step(direction) {
+            if (!current().image) return;
             const from = scale || fitted();
             const next = direction > 0
                 ? ZOOM_STEPS.find((value) => value > from + 0.005)
@@ -421,20 +430,32 @@ export function imageDialog(siteId, images, index = 0, { onEdit } = {}) {
         }
 
         function describe() {
-            const pixels = img.naturalWidth ? `${img.naturalWidth} × ${img.naturalHeight}` : '…';
+            const file = current();
+            const spot = images.indexOf(file);
             meta.textContent = [
-                pixels,
-                bytes(current().size),
-                images.length > 1 ? `${at + 1} of ${images.length}` : '',
+                file.image ? (img.naturalWidth ? `${img.naturalWidth} × ${img.naturalHeight}` : '…') : 'Not an image',
+                bytes(file.size),
+                images.length > 1 && spot >= 0 ? `${spot + 1} of ${images.length}` : '',
             ].filter(Boolean).join('  ·  ');
         }
 
         function show() {
             const file = current();
-            stage.classList.add('is-loading');
             stage.classList.remove('is-broken');
             apply(0);
-            img.src = previewUrl(siteId, file.path, file.mtime);
+
+            if (file.image) {
+                stage.classList.remove('is-blocked');
+                stage.classList.add('is-loading');
+                img.src = previewUrl(siteId, file.path, file.mtime);
+            } else {
+                // Nothing is fetched for a file the viewer cannot draw.
+                stage.classList.remove('is-loading');
+                stage.classList.add('is-blocked');
+                note.textContent = `${file.name} is not an image.`;
+            }
+            [zoomOut, zoomIn, zoomFit, zoomLabel].forEach((button) => { button.disabled = !file.image; });
+
             saveLink.href = downloadUrl(siteId, [file.path]);
             editButton.hidden = !onEdit || !file.editable;
             if (head) {
@@ -444,20 +465,30 @@ export function imageDialog(siteId, images, index = 0, { onEdit } = {}) {
             describe();
         }
 
+        /** Steps to the next image in listing order, skipping everything else. */
         function go(delta) {
-            if (images.length < 2) return;
-            at = (at + delta + images.length) % images.length;
+            if (images.length === 0) return;
+            let index = at;
+            for (let hop = 0; hop < files.length; hop++) {
+                index = (index + delta + files.length) % files.length;
+                if (files[index].image) break;
+            }
+            if (index === at) return;
+            at = index;
             show();
         }
 
         img.addEventListener('load', () => {
+            if (!current().image) return;
             stage.classList.remove('is-loading');
             apply(0);
             describe();
         });
         img.addEventListener('error', () => {
+            if (!current().image) return;
             stage.classList.remove('is-loading');
             stage.classList.add('is-broken');
+            note.textContent = `${current().name} could not be displayed.`;
         });
         img.addEventListener('dblclick', () => apply(scale === 0 ? 1 : 0));
 
@@ -509,17 +540,17 @@ export function imageDialog(siteId, images, index = 0, { onEdit } = {}) {
         detach = () => document.removeEventListener('keydown', onKey, true);
 
         return {
-            title: current().name,
-            sub: current().path,
+            title: files[at].name,
+            sub: files[at].path,
             glyph: 'file-image',
             full: true,
             body: stage,
             foot: [
                 el('span', { class: 'spacer' }, meta),
-                el('button', { class: 'icon-btn', title: 'Zoom out (−)', onclick: () => step(-1) }, icon('minus')),
+                zoomOut,
                 zoomLabel,
-                el('button', { class: 'icon-btn', title: 'Zoom in (+)', onclick: () => step(1) }, icon('plus')),
-                el('button', { class: 'icon-btn', title: 'Fit to the window (F)', onclick: () => apply(0) }, icon('fit')),
+                zoomIn,
+                zoomFit,
                 images.length > 1 ? el('button', { class: 'icon-btn', title: 'Previous image (←)', onclick: () => go(-1) }, icon('chevron-left')) : null,
                 images.length > 1 ? el('button', { class: 'icon-btn', title: 'Next image (→)', onclick: () => go(1) }, icon('chevron-right')) : null,
                 editButton,
@@ -614,7 +645,7 @@ const SHORTCUTS = [
     ['Enter', 'Open folder / view file'],
     ['Backspace', 'Up one level'],
     ['F2', 'Rename'],
-    ['F3', 'View - image viewer or editor'],
+    ['F3', 'View without leaving the app'],
     ['F4', 'Edit as text'],
     ['F5', 'Copy to the other panel'],
     ['F6', 'Move to the other panel'],
