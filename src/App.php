@@ -17,6 +17,13 @@ use FileBridge\Transfer\TransferManager;
 /** Tiny service container - built once per request. */
 final class App
 {
+    /**
+     * Release number. Shown in the top bar and used as the cache-busting query
+     * on every asset, so index.php, manifest.php and sw.php always agree on
+     * which files belong together.
+     */
+    public const VERSION = '1.3';
+
     private static ?self $instance = null;
 
     public readonly string $base;

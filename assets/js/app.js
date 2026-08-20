@@ -5,6 +5,7 @@ import { el, icon, $, $$, toast, notifyError, contextMenu, modalsOpen, closeMenu
 import { siteDialog, confirm, helpDialog, prompt } from './dialogs.js';
 import { Panel } from './panel.js';
 import { Queue } from './transfer.js';
+import { initPwa, applyThemeColour } from './pwa.js';
 
 const app = {
     panels: {},
@@ -16,6 +17,8 @@ const app = {
 // ── boot ─────────────────────────────────────────────────────────────────────
 
 async function boot() {
+    initPwa();
+
     let info;
     try {
         info = await call('app.state');
@@ -327,6 +330,7 @@ function wireChrome() {
     const applyTheme = (theme) => {
         document.documentElement.dataset.theme = theme;
         $('#theme-icon use').setAttribute('href', theme === 'dark' ? '#i-moon' : '#i-sun');
+        applyThemeColour();
         try { localStorage.setItem('fb.theme', theme); } catch { /* ignore */ }
     };
     applyTheme(document.documentElement.dataset.theme || state.settings.theme || 'dark');

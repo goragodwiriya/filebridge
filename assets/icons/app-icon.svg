@@ -1,0 +1,16 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512" width="512" height="512">
+<!-- FileBridge app icon - the top bar mark at installable size. -->
+<defs>
+  <linearGradient id="fb-grad" x1="0" y1="0" x2="1" y2="1">
+    <stop offset="0" stop-color="#6366f1"/>
+    <stop offset="1" stop-color="#8b5cf6"/>
+  </linearGradient>
+</defs>
+<rect width="512" height="512" rx="112" fill="url(#fb-grad)"/>
+<g transform="translate(96 96) scale(13.3333)" fill="none" stroke="#ffffff" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round">
+  <rect x="2" y="4" width="9" height="6" rx="1.5"/>
+  <rect x="13" y="14" width="9" height="6" rx="1.5"/>
+  <path d="M11 7h5a3 3 0 0 1 3 3v4M13 17H8a3 3 0 0 1-3-3v-4"/>
+  <path d="m17 11 2 2 2-2M7 13l-2-2-2 2"/>
+</g>
+</svg>

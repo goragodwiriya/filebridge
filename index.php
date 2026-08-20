@@ -11,14 +11,20 @@ $app->startSession();
 
 $appName = htmlspecialchars((string) $app->config['app_name'], ENT_QUOTES);
 $theme   = htmlspecialchars((string) $app->config['default_theme'], ENT_QUOTES);
-$version = '1.2';
+$version = App::VERSION;
+
+// Colour of the browser / OS window chrome before the stylesheets are in -
+// the --surface token of each theme. Once the app is running, pwa.js reads that
+// token straight from tokens.css and keeps this in step with the theme toggle.
+$themeColours = ['dark' => '#14171e', 'light' => '#ffffff'];
+$themeColour  = $themeColours[$theme] ?? $themeColours['dark'];
 
 // One version for every module the browser loads. app.js carries the query in
 // its script tag; the import map hands the same one to everything app.js pulls
 // in - without it those files keep their plain URLs and a browser can end up
 // running a fresh module against a cached copy of another, which fails to link
 // and leaves a blank page.
-$modules = ['api', 'app', 'dialogs', 'panel', 'transfer', 'ui'];
+$modules = ['api', 'app', 'dialogs', 'panel', 'transfer', 'ui', 'pwa'];
 $imports = [];
 foreach ($modules as $module) {
     $imports['./assets/js/' . $module . '.js'] = './assets/js/' . $module . '.js?v=' . $version;
@@ -33,15 +39,29 @@ foreach ($modules as $module) {
 <meta name="color-scheme" content="dark light">
 <title><?= $appName ?> · Server to server transfers</title>
 <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24'><rect width='24' height='24' rx='6' fill='%236366f1'/><g fill='none' stroke='white' stroke-width='1.7' stroke-linecap='round'><path d='M6 8h8M18 16h-8'/><path d='m12 5 3 3-3 3M12 19l-3-3 3-3'/></g></svg>">
+<meta name="theme-color" content="<?= $themeColour ?>">
+<meta name="application-name" content="<?= $appName ?>">
+<!-- Installable app: manifest.php names it, sw.php caches the shell. -->
+<link rel="manifest" href="manifest.php?v=<?= $version ?>">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-title" content="<?= $appName ?>">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+<link rel="apple-touch-icon" href="assets/icons/apple-touch-icon.png?v=<?= $version ?>">
 <link rel="stylesheet" href="assets/css/tokens.css?v=<?= $version ?>">
 <link rel="stylesheet" href="assets/css/components.css?v=<?= $version ?>">
 <link rel="stylesheet" href="assets/css/layout.css?v=<?= $version ?>">
 <script type="importmap"><?= json_encode(['imports' => $imports], JSON_UNESCAPED_SLASHES) ?></script>
 <script>
-    // Apply the stored theme before first paint so there is no flash.
+    // Apply the stored theme before first paint so there is no flash - the
+    // installed app shows this colour in its title bar, so it moves too.
+    var colours = <?= json_encode($themeColours) ?>;
     try {
         var t = localStorage.getItem('fb.theme');
-        if (t) { document.documentElement.dataset.theme = t; }
+        if (t && colours[t]) {
+            document.documentElement.dataset.theme = t;
+            document.querySelector('meta[name="theme-color"]').setAttribute('content', colours[t]);
+        }
     } catch (e) {}
 </script>
 </head>
@@ -98,6 +118,9 @@ foreach ($modules as $module) {
                 <svg class="icon icon-sm"><use href="#i-list"></use></svg>
                 Queue
                 <span class="count" id="queue-count" hidden>0</span>
+            </button>
+            <button class="icon-btn" id="btn-install" title="Install as an app" hidden>
+                <svg class="icon"><use href="#i-install"></use></svg>
             </button>
             <button class="icon-btn" id="btn-help" title="Keyboard shortcuts (?)">
                 <svg class="icon"><use href="#i-info"></use></svg>

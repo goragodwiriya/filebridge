@@ -1,0 +1,113 @@
+<!doctype html>
+<!--
+    Shown by the service worker when the app window is opened without a route to
+    the server. Deliberately self contained: no stylesheet, no script, no icon
+    file to fetch, so it renders from the cache alone.
+-->
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<meta name="color-scheme" content="dark light">
+<title>Offline · FileBridge</title>
+<script>
+    // Match the theme the user picked in the app.
+    try {
+        var t = localStorage.getItem('fb.theme');
+        if (t) { document.documentElement.dataset.theme = t; }
+    } catch (e) {}
+</script>
+<style>
+    :root {
+        color-scheme: dark;
+        --bg: #0e1015;
+        --surface: #14171e;
+        --border: #262c38;
+        --text: #e8ebf2;
+        --muted: #8a93a6;
+        --accent: #6366f1;
+        --accent-hover: #7c7ff5;
+    }
+    /* The theme the app was left on wins; the system preference decides when
+       there is no stored choice yet. */
+    :root[data-theme="light"] {
+        color-scheme: light;
+        --bg: #eef0f4;
+        --surface: #ffffff;
+        --border: #e0e3ea;
+        --text: #171a21;
+        --muted: #626d84;
+    }
+    @media (prefers-color-scheme: light) {
+        :root:not([data-theme="dark"]) {
+            color-scheme: light;
+            --bg: #eef0f4;
+            --surface: #ffffff;
+            --border: #e0e3ea;
+            --text: #171a21;
+            --muted: #626d84;
+        }
+    }
+    * { box-sizing: border-box; }
+    body {
+        margin: 0;
+        min-height: 100vh;
+        min-height: 100dvh;
+        display: grid;
+        place-items: center;
+        padding: 24px;
+        background: var(--bg);
+        color: var(--text);
+        font: 14px/1.55 system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
+    }
+    .card {
+        width: min(380px, 100%);
+        padding: 28px 26px 26px;
+        border: 1px solid var(--border);
+        border-radius: 16px;
+        background: var(--surface);
+        text-align: center;
+        box-shadow: 0 18px 40px -24px #00000080;
+    }
+    .mark {
+        display: grid;
+        place-items: center;
+        width: 46px;
+        height: 46px;
+        margin: 0 auto 16px;
+        border-radius: 13px;
+        background: linear-gradient(140deg, var(--accent), #8b5cf6);
+        color: #fff;
+    }
+    h1 { margin: 0 0 8px; font-size: 17px; letter-spacing: -.01em; }
+    p { margin: 0 0 20px; color: var(--muted); }
+    button {
+        height: 34px;
+        padding: 0 18px;
+        border: 0;
+        border-radius: 9px;
+        background: var(--accent);
+        color: #fff;
+        font: inherit;
+        font-weight: 600;
+        cursor: pointer;
+    }
+    button:hover { background: var(--accent-hover); }
+</style>
+</head>
+<body>
+<div class="card">
+    <span class="mark">
+        <svg width="26" height="26" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+            <rect x="2" y="4" width="9" height="6" rx="1.5"/>
+            <rect x="13" y="14" width="9" height="6" rx="1.5"/>
+            <path d="M11 7h5a3 3 0 0 1 3 3v4M13 17H8a3 3 0 0 1-3-3v-4"/>
+            <path d="m17 11 2 2 2-2M7 13l-2-2-2 2"/>
+        </svg>
+    </span>
+    <h1>No connection to the server</h1>
+    <p>FileBridge does its work on the server, so it needs a route to it. Check the network and try again.</p>
+    <button type="button" onclick="location.reload()">Try again</button>
+</div>
+</body>
+</html>
