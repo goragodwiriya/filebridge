@@ -55,6 +55,23 @@ final class Mime
         'htaccess', 'gitignore', 'lock', 'svg', 'csv', 'tpl', 'twig', 'blade',
     ];
 
+    /**
+     * Types safe to hand back with "Content-Disposition: inline".
+     * Everything here renders inside an <img> tag, which cannot run script -
+     * an inline SVG document would, so it is only ever displayed that way.
+     */
+    private const IMAGES = [
+        'jpg'  => 'image/jpeg',
+        'jpeg' => 'image/jpeg',
+        'png'  => 'image/png',
+        'gif'  => 'image/gif',
+        'webp' => 'image/webp',
+        'avif' => 'image/avif',
+        'bmp'  => 'image/bmp',
+        'ico'  => 'image/x-icon',
+        'svg'  => 'image/svg+xml',
+    ];
+
     public static function icon(string $ext): string
     {
         return self::MAP[strtolower($ext)][0] ?? 'file';
@@ -68,6 +85,17 @@ final class Mime
     public static function editable(string $ext): bool
     {
         return in_array(strtolower($ext), self::EDITABLE, true);
+    }
+
+    public static function image(string $ext): bool
+    {
+        return isset(self::IMAGES[strtolower($ext)]);
+    }
+
+    /** Content type for inline viewing, or null when the file must not be inlined. */
+    public static function inlineType(string $name): ?string
+    {
+        return self::IMAGES[strtolower(pathinfo($name, PATHINFO_EXTENSION))] ?? null;
     }
 
     public static function contentType(string $name): string

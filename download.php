@@ -5,6 +5,12 @@ declare(strict_types=1);
 /**
  * Streams one file - or a zip of a selection - straight to the browser.
  * Separate from api.php because the response is binary, not JSON.
+ *
+ * With ?inline=1 the file is displayed instead of saved, which the image
+ * viewer uses. That path is deliberately narrow: only the types in
+ * Mime::inlineType() may be inlined, and the response is locked down so the
+ * browser cannot be talked into treating someone's upload as a document on
+ * this origin.
  */
 
 use FileBridge\App;
@@ -53,15 +59,34 @@ while (ob_get_level() > 0) {
 }
 
 $single = count($paths) === 1 ? $driver->stat($paths[0]) : null;
+$inline = ($_GET['inline'] ?? '') !== '' && $single !== null && Mime::inlineType($single->name) !== null;
 
 if ($single !== null && !$single->isDir()) {
-    $app->logger()->audit($app->auth()->username(), 'fs.download', ['site' => $siteId, 'path' => $paths[0]]);
+    $app->logger()->audit(
+        $app->auth()->username(),
+        $inline ? 'fs.preview' : 'fs.download',
+        ['site' => $siteId, 'path' => $paths[0]]
+    );
 
-    header('Content-Type: ' . Mime::contentType($single->name));
+    header('Content-Type: ' . ($inline ? Mime::inlineType($single->name) : Mime::contentType($single->name)));
     header('Content-Length: ' . $single->size);
-    header('Content-Disposition: attachment; filename="' . addslashes($single->name) . '"; filename*=UTF-8\'\'' . rawurlencode($single->name));
+    header(
+        'Content-Disposition: ' . ($inline ? 'inline' : 'attachment')
+        . '; filename="' . addslashes($single->name) . '"; filename*=UTF-8\'\'' . rawurlencode($single->name)
+    );
     header('X-Content-Type-Options: nosniff');
-    header('Cache-Control: no-store');
+    if ($inline) {
+        // Nothing served here may load anything, run anything, or be framed -
+        // an SVG opened directly in a tab would otherwise run its own script
+        // with this app's cookies.
+        header("Content-Security-Policy: default-src 'none'; style-src 'unsafe-inline'; img-src data:; sandbox");
+        header('X-Frame-Options: SAMEORIGIN');
+        // The viewer puts the file's mtime in the URL, so a rewritten file
+        // never comes back from the cache.
+        header('Cache-Control: private, max-age=300');
+    } else {
+        header('Cache-Control: no-store');
+    }
 
     $handle = $driver->readStream($paths[0]);
     $out    = fopen('php://output', 'wb');

@@ -17,22 +17,22 @@ return [
     // Directories the built-in "Local" connection may browse. Anything outside
     // is refused, symlinks included. Leave empty to allow the directory that
     // contains FileBridge (usually the web root).
-    'local_roots' => [],
+    'local_roots' => ['/mnt/Server/htdocs'],
 
     // Transfer engine
-    'chunk_size'        => 262144,   // 256 KB per read/write chunk
-    'transfer_workers'  => 4,        // files copied in parallel per job (1 = one at a time)
-    'max_edit_size'     => 2097152,  // 2 MB - largest file openable in the text editor
-    'max_upload_size'   => 0,        // 0 = use PHP's upload_max_filesize
-    'job_retention'     => 86400,    // seconds to keep finished jobs on disk
-    'progress_interval' => 0.25,     // seconds between progress writes
+    'chunk_size' => 262144, // 256 KB per read/write chunk
+    'transfer_workers' => 4, // files copied in parallel per job (1 = one at a time)
+    'max_edit_size' => 2097152, // 2 MB - largest file openable in the text editor
+    'max_upload_size' => 0, // 0 = use PHP's upload_max_filesize
+    'job_retention' => 86400, // seconds to keep finished jobs on disk
+    'progress_interval' => 0.25, // seconds between progress writes
 
     // Path to the PHP CLI binary used by the background worker.
     // Empty = detect automatically (matches the running PHP version first).
     'php_binary' => '',
 
     // Connection defaults
-    'timeout'   => 20,
+    'timeout' => 20,
     'keepalive' => 30,
 
     // Absolute path to the libsodium master key that encrypts stored
@@ -42,14 +42,14 @@ return [
     'key_file' => '',
 
     // Security
-    'session_lifetime'   => 28800,   // 8 hours
+    'session_lifetime' => 28800, // 8 hours
     'login_max_attempts' => 5,
-    'login_lockout'      => 900,     // 15 minutes
-    'ip_allowlist'       => [],      // e.g. ['127.0.0.1', '192.168.1.0/24']; empty = allow all
-    'verify_host_key'    => true,    // trust-on-first-use SSH fingerprint pinning
+    'login_lockout' => 900, // 15 minutes
+    'ip_allowlist' => [], // e.g. ['127.0.0.1', '192.168.1.0/24']; empty = allow all
+    'verify_host_key' => true, // trust-on-first-use SSH fingerprint pinning
 
     // UI defaults
-    'default_theme' => 'dark',       // dark | light
-    'show_hidden'   => false,
-    'date_format'   => 'Y-m-d H:i',
+    'default_theme' => 'dark', // dark | light
+    'show_hidden' => false,
+    'date_format' => 'Y-m-d H:i'
 ];

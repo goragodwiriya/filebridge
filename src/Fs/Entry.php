@@ -53,6 +53,7 @@ final class Entry
             'icon'     => $this->isDir() ? 'folder' : Mime::icon($ext),
             'kind'     => $this->isDir() ? 'folder' : Mime::colour($ext),
             'editable' => !$this->isDir() && Mime::editable($ext),
+            'image'    => !$this->isDir() && Mime::image($ext),
             'hidden'   => str_starts_with($this->name, '.'),
         ];
     }

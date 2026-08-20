@@ -134,7 +134,8 @@ export const notifyError = (error) =>
 let openModals = 0;
 
 /**
- * Build a modal. `render(close)` returns { title, sub, glyph, tone, body, foot, wide }.
+ * Build a modal. `render(close)` returns
+ * { title, sub, glyph, tone, body, foot, wide, full, dismissable, onMount }.
  * Resolves with whatever close(value) was called with.
  */
 export function modal(build) {
@@ -178,6 +179,10 @@ export function modal(build) {
         document.body.append(scrim);
         openModals++;
         document.addEventListener('keydown', onKey, true);
+
+        // Dialogs that keep changing their own header - the viewer swapping
+        // images, for one - need the built nodes back.
+        spec.onMount?.(box, close);
 
         const focus = box.querySelector('[autofocus], input, textarea, button.btn-primary');
         if (focus) setTimeout(() => focus.focus(), 40);

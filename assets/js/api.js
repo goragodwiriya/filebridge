@@ -87,6 +87,15 @@ export function downloadUrl(site, paths) {
     return `download.php?${params.toString()}`;
 }
 
+/**
+ * Same stream, but asked for inline so the browser paints it instead of saving
+ * it. `version` (the file's mtime) keeps a rewritten file from being served
+ * from the browser cache.
+ */
+export function previewUrl(site, path, version = 0) {
+    return `${downloadUrl(site, [path])}&inline=1&v=${version}`;
+}
+
 export function site(id) {
     return state.sites.find((entry) => entry.id === id) || null;
 }

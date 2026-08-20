@@ -5,7 +5,7 @@ import {
     el, icon, $, $$, bytes, when, octal, rwx, toast, notifyError,
     contextMenu, emptyState, skeleton, parentOf,
 } from './ui.js';
-import { confirm, prompt, chmodDialog, editorDialog, propertiesDialog } from './dialogs.js';
+import { confirm, prompt, chmodDialog, editorDialog, imageDialog, propertiesDialog } from './dialogs.js';
 
 const CHUNK = 400; // rows rendered per batch
 
@@ -374,6 +374,8 @@ export class Panel {
     open(entry) {
         if (!entry) return;
         if (entry.isDir) { this.load(entry.path); return; }
+        // An SVG is both: show it first, the viewer offers the editor.
+        if (entry.image) { this.preview(entry); return; }
         if (entry.editable) { this.edit(entry); return; }
         window.open(downloadUrl(this.siteId, [entry.path]), '_blank');
     }
@@ -456,6 +458,16 @@ export class Panel {
     download(entries = this.selection()) {
         if (entries.length === 0) return;
         window.location.href = downloadUrl(this.siteId, entries.map((entry) => entry.path));
+    }
+
+    /** Opens the image viewer, with the folder's other images alongside it. */
+    preview(entry) {
+        const images = this.view.filter((item) => item.image);
+        const index = images.findIndex((item) => item.path === entry.path);
+
+        return imageDialog(this.siteId, index < 0 ? [entry] : images, Math.max(index, 0), {
+            onEdit: (file) => this.edit(file),
+        });
     }
 
     async edit(entry) {
@@ -598,10 +610,13 @@ export class Panel {
         const chosen = this.selection();
         const many = chosen.length > 1;
         const other = this.ctx.getOther(this);
+        const [openLabel, openIcon] = entry.isDir ? ['Open', 'folder-open']
+            : entry.image ? ['View', 'eye']
+                : entry.editable ? ['Edit', 'pencil'] : ['Download', 'download'];
 
         contextMenu(event.clientX, event.clientY, [
             { label: many ? `${chosen.length} items selected` : entry.name, header: true },
-            { label: entry.isDir ? 'Open' : (entry.editable ? 'Edit' : 'Download'), icon: entry.isDir ? 'folder-open' : (entry.editable ? 'pencil' : 'download'), disabled: many, onSelect: () => this.open(entry) },
+            { label: openLabel, icon: openIcon, disabled: many, onSelect: () => this.open(entry), key: 'F3' },
             { label: `Copy to ${other?.siteLabel() || 'other panel'}`, icon: this.side === 'left' ? 'arrow-right' : 'arrow-left', onSelect: () => this.ctx.copyToOther(this, 'copy'), key: 'F5' },
             { label: 'Move to the other panel', icon: 'swap', onSelect: () => this.ctx.copyToOther(this, 'move'), key: 'F6' },
             'sep',

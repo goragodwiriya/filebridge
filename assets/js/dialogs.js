@@ -1,6 +1,6 @@
 // Every modal the app can open.
 
-import { call, state } from './api.js';
+import { call, state, previewUrl, downloadUrl } from './api.js';
 import { el, icon, field, modal, toast, notifyError, bytes, octal, rwx, fullDate } from './ui.js';
 
 const PROTOCOLS = [
@@ -361,6 +361,185 @@ export function editorDialog(file, content, onSave) {
     });
 }
 
+// ── image viewer ─────────────────────────────────────────────────────────────
+
+const ZOOM_STEPS = [0.1, 0.2, 0.33, 0.5, 0.75, 1, 1.5, 2, 3, 4, 6, 8];
+
+/**
+ * Shows one image and steps through the rest of the folder with the arrow keys.
+ * The bytes come from download.php?inline=1 and are only ever painted into an
+ * <img>, never framed - the note in download.php explains why that matters.
+ */
+export function imageDialog(siteId, images, index = 0, { onEdit } = {}) {
+    let at = Math.max(0, Math.min(index, images.length - 1));
+    let scale = 0; // 0 means "whatever fits the stage"
+    let head = null;
+    let box = null;
+    let detach = () => {};
+
+    const opened = modal((close) => {
+        const img = el('img', { class: 'viewer-img', alt: '', draggable: 'false' });
+        const note = el('p', { class: 'viewer-note', text: 'This image could not be displayed.' });
+        const stage = el('div', { class: 'viewer-stage is-loading' }, img, note);
+        const meta = el('span', { class: 'hint' });
+        const current = () => images[at];
+
+        const zoomLabel = el('button', {
+            class: 'btn btn-sm mono',
+            title: 'Actual size (0)',
+            style: { minWidth: '64px', justifyContent: 'center' },
+            onclick: () => apply(scale === 1 ? 0 : 1),
+        });
+        const saveLink = el('a', { class: 'btn' }, icon('download', 'icon icon-sm'), 'Download');
+        const editButton = el('button', {
+            class: 'btn',
+            onclick: () => { const file = current(); close(undefined); onEdit?.(file); },
+        }, icon('pencil', 'icon icon-sm'), 'Edit as text');
+
+        // An SVG with only a viewBox reports no intrinsic size; fall back to the
+        // stage so zooming still means something for those.
+        const natural = () => img.naturalWidth || stage.clientWidth;
+
+        /** The scale the image is actually drawn at while the stage is fitting it. */
+        const fitted = () => (img.naturalWidth
+            ? Math.min(1, stage.clientWidth / img.naturalWidth, stage.clientHeight / img.naturalHeight)
+            : 1);
+
+        function apply(next) {
+            scale = next;
+            stage.classList.toggle('is-zoomed', next !== 0);
+            img.style.width = next === 0 ? '' : `${Math.round(natural() * next)}px`;
+            zoomLabel.textContent = next === 0 ? 'Fit' : `${Math.round(next * 100)}%`;
+        }
+
+        function step(direction) {
+            const from = scale || fitted();
+            const next = direction > 0
+                ? ZOOM_STEPS.find((value) => value > from + 0.005)
+                : [...ZOOM_STEPS].reverse().find((value) => value < from - 0.005);
+            if (next) apply(next);
+        }
+
+        function describe() {
+            const pixels = img.naturalWidth ? `${img.naturalWidth} × ${img.naturalHeight}` : '…';
+            meta.textContent = [
+                pixels,
+                bytes(current().size),
+                images.length > 1 ? `${at + 1} of ${images.length}` : '',
+            ].filter(Boolean).join('  ·  ');
+        }
+
+        function show() {
+            const file = current();
+            stage.classList.add('is-loading');
+            stage.classList.remove('is-broken');
+            apply(0);
+            img.src = previewUrl(siteId, file.path, file.mtime);
+            saveLink.href = downloadUrl(siteId, [file.path]);
+            editButton.hidden = !onEdit || !file.editable;
+            if (head) {
+                head.title.textContent = file.name;
+                head.sub.textContent = file.path;
+            }
+            describe();
+        }
+
+        function go(delta) {
+            if (images.length < 2) return;
+            at = (at + delta + images.length) % images.length;
+            show();
+        }
+
+        img.addEventListener('load', () => {
+            stage.classList.remove('is-loading');
+            apply(0);
+            describe();
+        });
+        img.addEventListener('error', () => {
+            stage.classList.remove('is-loading');
+            stage.classList.add('is-broken');
+        });
+        img.addEventListener('dblclick', () => apply(scale === 0 ? 1 : 0));
+
+        stage.addEventListener('wheel', (event) => {
+            if (!event.ctrlKey) return;
+            event.preventDefault();
+            step(event.deltaY < 0 ? 1 : -1);
+        }, { passive: false });
+
+        // Drag to pan, once the image is larger than the stage.
+        stage.addEventListener('pointerdown', (event) => {
+            if (scale === 0 || event.button !== 0) return;
+            event.preventDefault();
+            const from = { x: event.clientX, y: event.clientY, left: stage.scrollLeft, top: stage.scrollTop };
+            const move = (moved) => {
+                stage.scrollLeft = from.left - (moved.clientX - from.x);
+                stage.scrollTop = from.top - (moved.clientY - from.y);
+            };
+            const drop = () => {
+                stage.classList.remove('is-panning');
+                window.removeEventListener('pointermove', move);
+                window.removeEventListener('pointerup', drop);
+            };
+            stage.classList.add('is-panning');
+            window.addEventListener('pointermove', move);
+            window.addEventListener('pointerup', drop);
+        });
+
+        const KEYS = {
+            ArrowLeft: () => go(-1),
+            ArrowRight: () => go(1),
+            '+': () => step(1),
+            '=': () => step(1),
+            '-': () => step(-1),
+            _: () => step(-1),
+            0: () => apply(1),
+            f: () => apply(0),
+        };
+        const onKey = (event) => {
+            // A dialog stacked on top of this one owns the keyboard.
+            const scrims = document.querySelectorAll('.scrim');
+            if (!box || scrims[scrims.length - 1] !== box.parentElement) return;
+            const handler = KEYS[event.key];
+            if (!handler) return;
+            event.preventDefault();
+            handler();
+        };
+        document.addEventListener('keydown', onKey, true);
+        detach = () => document.removeEventListener('keydown', onKey, true);
+
+        return {
+            title: current().name,
+            sub: current().path,
+            glyph: 'file-image',
+            full: true,
+            body: stage,
+            foot: [
+                el('span', { class: 'spacer' }, meta),
+                el('button', { class: 'icon-btn', title: 'Zoom out (−)', onclick: () => step(-1) }, icon('minus')),
+                zoomLabel,
+                el('button', { class: 'icon-btn', title: 'Zoom in (+)', onclick: () => step(1) }, icon('plus')),
+                el('button', { class: 'icon-btn', title: 'Fit to the window (F)', onclick: () => apply(0) }, icon('fit')),
+                images.length > 1 ? el('button', { class: 'icon-btn', title: 'Previous image (←)', onclick: () => go(-1) }, icon('chevron-left')) : null,
+                images.length > 1 ? el('button', { class: 'icon-btn', title: 'Next image (→)', onclick: () => go(1) }, icon('chevron-right')) : null,
+                editButton,
+                saveLink,
+                el('button', { class: 'btn btn-primary', onclick: () => close(undefined) }, 'Close'),
+            ],
+            onMount: (mounted) => {
+                box = mounted;
+                head = {
+                    title: mounted.querySelector('.modal-head h2'),
+                    sub: mounted.querySelector('.modal-head .sub'),
+                };
+                show();
+            },
+        };
+    });
+
+    return opened.finally(() => detach());
+}
+
 // ── transfer options ─────────────────────────────────────────────────────────
 
 export function transferDialog({ mode, count, from, to, targetPath }) {
@@ -432,9 +611,11 @@ export function propertiesDialog(entry, siteName) {
 
 const SHORTCUTS = [
     ['Tab', 'Switch panel'],
-    ['Enter', 'Open folder / edit file'],
+    ['Enter', 'Open folder / view file'],
     ['Backspace', 'Up one level'],
     ['F2', 'Rename'],
+    ['F3', 'View - image viewer or editor'],
+    ['F4', 'Edit as text'],
     ['F5', 'Copy to the other panel'],
     ['F6', 'Move to the other panel'],
     ['F7', 'New folder'],

@@ -439,6 +439,12 @@ function wireKeyboard() {
             case event.key === 'F2':
                 if (cursorEntry) { event.preventDefault(); panel.rename(cursorEntry); }
                 break;
+            case event.key === 'F3':
+                if (cursorEntry) { event.preventDefault(); panel.open(cursorEntry); }
+                break;
+            case event.key === 'F4':
+                if (cursorEntry?.editable) { event.preventDefault(); panel.edit(cursorEntry); }
+                break;
             case event.key === 'F8' || event.key === 'Delete':
                 event.preventDefault();
                 panel.remove();
