@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace FileBridge\Fs;
 
 use FileBridge\Security\HostKeyStore;
+use FileBridge\Support\Lang;
 use phpseclib3\Crypt\Common\PrivateKey;
 use phpseclib3\Crypt\PublicKeyLoader;
 use phpseclib3\Net\SFTP;
@@ -49,7 +50,9 @@ final class SftpSeclibDriver implements DriverInterface, ExecCapable
             $sftp = new SFTP($this->host, $this->port, $this->timeout);
             $sftp->disableStatCache();
         } catch (Throwable $e) {
-            throw new ConnectionException('Cannot reach ' . $this->host . ':' . $this->port . ' - ' . $e->getMessage());
+            throw new ConnectionException(Lang::t('fs.unreachable', [
+                'host' => $this->host, 'port' => $this->port, 'error' => $e->getMessage(),
+            ]));
         }
 
         $this->checkHostKey($sftp);
@@ -60,10 +63,10 @@ final class SftpSeclibDriver implements DriverInterface, ExecCapable
                 ? $sftp->login($this->username)
                 : $sftp->login($this->username, $credential);
         } catch (Throwable $e) {
-            throw new ConnectionException('SSH authentication error: ' . $e->getMessage());
+            throw new ConnectionException(Lang::t('fs.ssh_auth_error', ['error' => $e->getMessage()]));
         }
         if (!$ok) {
-            throw new ConnectionException('SSH authentication failed for user "' . $this->username . '".');
+            throw new ConnectionException(Lang::t('fs.ssh_auth', ['user' => $this->username]));
         }
 
         $this->sftp = $sftp;
@@ -90,7 +93,7 @@ final class SftpSeclibDriver implements DriverInterface, ExecCapable
         $path = Path::normalise($path);
         $rows = $sftp->rawlist($path);
         if ($rows === false) {
-            throw new FsException('Cannot list directory: ' . $path);
+            throw new FsException(Lang::t('fs.list', ['path' => $path]));
         }
 
         $entries = [];
@@ -170,7 +173,7 @@ final class SftpSeclibDriver implements DriverInterface, ExecCapable
         if (!$sftp->mkdir($path, -1, true)) {
             $sftp->clearStatCache();
             if (!$sftp->is_dir($path)) {
-                throw new FsException('Cannot create directory: ' . $path);
+                throw new FsException(Lang::t('fs.mkdir', ['path' => $path]));
             }
         }
     }
@@ -178,21 +181,21 @@ final class SftpSeclibDriver implements DriverInterface, ExecCapable
     public function delete(string $path, bool $recursive = false): void
     {
         if (!$this->handle()->delete(Path::normalise($path), $recursive)) {
-            throw new FsException('Cannot delete: ' . $path);
+            throw new FsException(Lang::t('fs.delete', ['path' => $path]));
         }
     }
 
     public function rename(string $from, string $to): void
     {
         if (!$this->handle()->rename(Path::normalise($from), Path::normalise($to))) {
-            throw new FsException('Rename failed: ' . $from);
+            throw new FsException(Lang::t('fs.rename', ['path' => $from]));
         }
     }
 
     public function chmod(string $path, int $mode): void
     {
         if ($this->handle()->chmod($mode, Path::normalise($path)) === false) {
-            throw new FsException('chmod failed: ' . $path);
+            throw new FsException(Lang::t('fs.chmod', ['path' => $path]));
         }
     }
 
@@ -201,7 +204,7 @@ final class SftpSeclibDriver implements DriverInterface, ExecCapable
         $sftp   = $this->handle();
         $handle = @fopen($this->url($path), 'rb', false, $this->context($sftp));
         if (!is_resource($handle)) {
-            throw new FsException('Cannot read: ' . $path);
+            throw new FsException(Lang::t('fs.read', ['path' => $path]));
         }
         Stream::prepare($handle);
 
@@ -216,7 +219,7 @@ final class SftpSeclibDriver implements DriverInterface, ExecCapable
             ? $sftp->put($path, $handle, SFTP::SOURCE_STRING, $offset)
             : $sftp->put($path, $handle);
         if ($ok === false) {
-            throw new FsException('Upload failed: ' . $path . ' - ' . $this->lastError($sftp));
+            throw new FsException(Lang::t('fs.upload_reason', ['path' => $path, 'error' => $this->lastError($sftp)]));
         }
     }
 
@@ -282,14 +285,12 @@ final class SftpSeclibDriver implements DriverInterface, ExecCapable
         $result = $this->hostKeys->verify($this->host, $this->port, $fp);
 
         if ($result['status'] === 'changed') {
-            throw new ConnectionException(sprintf(
-                "HOST KEY CHANGED for %s:%d.\nExpected %s\nGot      %s\n"
-                . 'Someone could be intercepting the connection. Clear the pinned key in Settings if this was intended.',
-                $this->host,
-                $this->port,
-                (string) $result['expected'],
-                $fp
-            ));
+            throw new ConnectionException(Lang::t('fs.hostkey_changed', [
+                'host'     => $this->host,
+                'port'     => $this->port,
+                'expected' => (string) $result['expected'],
+                'got'      => $fp,
+            ]));
         }
     }
 
@@ -299,12 +300,10 @@ final class SftpSeclibDriver implements DriverInterface, ExecCapable
             try {
                 $key = PublicKeyLoader::load($this->privateKey, $this->passphrase !== '' ? $this->passphrase : false);
             } catch (Throwable $e) {
-                throw new ConnectionException('Private key could not be loaded: ' . $e->getMessage());
+                throw new ConnectionException(Lang::t('fs.key_load', ['error' => $e->getMessage()]));
             }
             if (!$key instanceof PrivateKey) {
-                throw new ConnectionException(
-                    'That key is a public key. Paste the private half (the file without the .pub suffix).'
-                );
+                throw new ConnectionException(Lang::t('fs.key_public'));
             }
 
             return $key;
@@ -342,7 +341,7 @@ final class SftpSeclibDriver implements DriverInterface, ExecCapable
     {
         $this->connect();
         if ($this->sftp === null) {
-            throw new ConnectionException('SFTP connection is not open.');
+            throw new ConnectionException(Lang::t('fs.sftp_closed'));
         }
 
         return $this->sftp;

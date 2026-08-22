@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace FileBridge\Security;
 
+use FileBridge\Support\Lang;
 use RuntimeException;
 
 /**
@@ -40,13 +41,13 @@ final class Crypto
         }
         $raw = base64_decode(substr($payload, 3), true);
         if ($raw === false || strlen($raw) < SODIUM_CRYPTO_SECRETBOX_NONCEBYTES + 1) {
-            throw new RuntimeException('Stored secret is corrupted.');
+            throw new RuntimeException(Lang::t('err.secret_corrupt'));
         }
         $nonce  = substr($raw, 0, SODIUM_CRYPTO_SECRETBOX_NONCEBYTES);
         $cipher = substr($raw, SODIUM_CRYPTO_SECRETBOX_NONCEBYTES);
         $plain  = sodium_crypto_secretbox_open($cipher, $nonce, $this->key);
         if ($plain === false) {
-            throw new RuntimeException('Unable to decrypt stored secret (wrong key?).');
+            throw new RuntimeException(Lang::t('err.secret_key'));
         }
 
         return $plain;
@@ -70,7 +71,7 @@ final class Crypto
             LOCK_EX
         );
         if ($ok === false) {
-            throw new RuntimeException('Cannot write key file: ' . $this->keyFile);
+            throw new RuntimeException(Lang::t('err.write_key', ['file' => $this->keyFile]));
         }
         @chmod($this->keyFile, 0600);
 

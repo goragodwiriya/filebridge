@@ -1,5 +1,7 @@
 // DOM helpers, formatting, toasts, modals and the context menu.
 
+import { t } from './i18n.js';
+
 export function el(tag, attrs = {}, ...children) {
     const node = document.createElement(tag);
     for (const [key, value] of Object.entries(attrs)) {
@@ -60,10 +62,10 @@ export function when(timestamp) {
     if (!timestamp) return '—';
     const date = new Date(timestamp * 1000);
     const diff = (Date.now() - date.getTime()) / 1000;
-    if (diff < 60) return 'just now';
-    if (diff < 3600) return `${Math.floor(diff / 60)} min ago`;
-    if (diff < 86400) return `${Math.floor(diff / 3600)} h ago`;
-    if (diff < 86400 * 6) return `${Math.floor(diff / 86400)} d ago`;
+    if (diff < 60) return t('time.just_now');
+    if (diff < 3600) return t('time.minutes', { count: Math.floor(diff / 60) });
+    if (diff < 86400) return t('time.hours', { count: Math.floor(diff / 3600) });
+    if (diff < 86400 * 6) return t('time.days', { count: Math.floor(diff / 86400) });
     const sameYear = date.getFullYear() === new Date().getFullYear();
     return sameYear
         ? `${pad(date.getDate())}/${pad(date.getMonth() + 1)} ${pad(date.getHours())}:${pad(date.getMinutes())}`
@@ -113,7 +115,7 @@ export function toast(title, text = '', kind = 'info', timeout = 4200) {
         el('div', { class: 'body' },
             el('div', { class: 'title', text: title }),
             text ? el('div', { class: 'text', text }) : null),
-        el('button', { class: 'icon-btn', title: 'Dismiss', onclick: () => close() }, icon('x', 'icon icon-sm')));
+        el('button', { class: 'icon-btn', title: t('common.dismiss'), onclick: () => close() }, icon('x', 'icon icon-sm')));
 
     let timer = null;
     const close = () => {
@@ -127,7 +129,12 @@ export function toast(title, text = '', kind = 'info', timeout = 4200) {
 }
 
 export const notifyError = (error) =>
-    toast(error?.code === 'csrf' ? 'Session expired' : 'Something went wrong', error?.message || String(error), 'error', 7000);
+    toast(
+        error?.code === 'csrf' ? t('toast.session_expired') : t('toast.error'),
+        error?.message || String(error),
+        'error',
+        7000
+    );
 
 // ── modal ────────────────────────────────────────────────────────────────────
 
@@ -167,7 +174,7 @@ export function modal(build) {
                 el('div', {},
                     el('h2', { text: spec.title }),
                     spec.sub ? el('div', { class: 'sub', text: spec.sub }) : null),
-                el('button', { class: 'icon-btn', title: 'Close', onclick: () => close(undefined) }, icon('x'))),
+                el('button', { class: 'icon-btn', title: t('common.close'), onclick: () => close(undefined) }, icon('x'))),
             el('div', { class: 'modal-body' }, spec.body),
         );
         if (spec.foot) box.append(el('footer', { class: 'modal-foot' }, spec.foot));

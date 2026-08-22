@@ -4,6 +4,8 @@ declare(strict_types=1);
 
 namespace FileBridge\Transfer;
 
+use FileBridge\Support\Lang;
+
 /** A queued transfer. Serialised to one JSON file so the worker and the web
  *  request can see the same state without a database. */
 final class Job
@@ -43,6 +45,8 @@ final class Job
         /** @var array<int,array{time:int,level:string,message:string}> */
         public array $log = [],
         public bool $spawned = false,
+        /** Language the job was queued in, so the worker logs in it too. */
+        public string $lang = '',
         public int $createdAt = 0,
         public int $startedAt = 0,
         public int $finishedAt = 0
@@ -94,7 +98,7 @@ final class Job
         $data['percent'] = $this->percent();
         $data['title']   = count($this->sourcePaths) === 1
             ? basename($this->sourcePaths[0])
-            : count($this->sourcePaths) . ' items';
+            : Lang::t('job.items', ['count' => count($this->sourcePaths)]);
 
         return $data;
     }

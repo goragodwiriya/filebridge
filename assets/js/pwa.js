@@ -2,6 +2,7 @@
 // browser chrome colour.
 
 import { $, toast } from './ui.js';
+import { t } from './i18n.js';
 
 // The import map stamps every module with the release number - reuse it so the
 // worker registration changes URL whenever the assets do.
@@ -24,8 +25,8 @@ export function initPwa() {
     window.addEventListener('appinstalled', () => {
         deferred = null;
         hideButton();
-        const name = document.querySelector('meta[name="application-name"]')?.content || 'The app';
-        toast(`${name} installed`, 'It now opens in its own window.', 'ok');
+        const name = document.querySelector('meta[name="application-name"]')?.content || 'FileBridge';
+        toast(t('app.installed', { name }), t('app.installed_text'), 'ok');
     });
 }
 

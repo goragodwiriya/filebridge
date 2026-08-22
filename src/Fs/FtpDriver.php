@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace FileBridge\Fs;
 
+use FileBridge\Support\Lang;
 use FTP\Connection;
 
 /**
@@ -46,16 +47,14 @@ final class FtpDriver implements DriverInterface
             : @ftp_connect($this->host, $this->port, $this->timeout);
 
         if ($conn === false) {
-            throw new ConnectionException(sprintf(
-                'Cannot reach %s://%s:%d',
-                $this->ssl ? 'ftps' : 'ftp',
-                $this->host,
-                $this->port
-            ));
+            throw new ConnectionException(Lang::t('fs.ftp_unreachable', [
+                'url'  => ($this->ssl ? 'ftps' : 'ftp') . '://' . $this->host,
+                'port' => $this->port,
+            ]));
         }
         if (!@ftp_login($conn, $this->username, $this->password)) {
             @ftp_close($conn);
-            throw new ConnectionException('FTP login failed for user "' . $this->username . '".');
+            throw new ConnectionException(Lang::t('fs.ftp_login', ['user' => $this->username]));
         }
         @ftp_set_option($conn, FTP_TIMEOUT_SEC, $this->timeout);
         @ftp_pasv($conn, $this->passive);
@@ -103,7 +102,7 @@ final class FtpDriver implements DriverInterface
             $raw = @ftp_rawlist($conn, $path);
         }
         if ($raw === false) {
-            throw new FsException('Cannot list directory: ' . $path);
+            throw new FsException(Lang::t('fs.list', ['path' => $path]));
         }
 
         return $this->fromRawList($raw, $path);
@@ -149,7 +148,7 @@ final class FtpDriver implements DriverInterface
             $current .= '/' . $segment;
             if (!@ftp_chdir($conn, $current)) {
                 if (!@ftp_mkdir($conn, $current)) {
-                    throw new FsException('Cannot create directory: ' . $current);
+                    throw new FsException(Lang::t('fs.mkdir', ['path' => $current]));
                 }
             }
         }
@@ -166,7 +165,7 @@ final class FtpDriver implements DriverInterface
         }
         if (!$recursive) {
             if (!@ftp_rmdir($conn, $path)) {
-                throw new FsException('Cannot delete: ' . $path);
+                throw new FsException(Lang::t('fs.delete', ['path' => $path]));
             }
 
             return;
@@ -175,21 +174,21 @@ final class FtpDriver implements DriverInterface
             $this->delete($entry->path, $entry->type === 'dir');
         }
         if (!@ftp_rmdir($conn, $path)) {
-            throw new FsException('Cannot delete directory: ' . $path);
+            throw new FsException(Lang::t('fs.rmdir', ['path' => $path]));
         }
     }
 
     public function rename(string $from, string $to): void
     {
         if (!@ftp_rename($this->handle(), Path::normalise($from), Path::normalise($to))) {
-            throw new FsException('Rename failed: ' . $from);
+            throw new FsException(Lang::t('fs.rename', ['path' => $from]));
         }
     }
 
     public function chmod(string $path, int $mode): void
     {
         if (@ftp_chmod($this->handle(), $mode, Path::normalise($path)) === false) {
-            throw new FsException('The server rejected the permission change (SITE CHMOD unsupported?).');
+            throw new FsException(Lang::t('fs.chmod_ftp'));
         }
     }
 
@@ -206,13 +205,13 @@ final class FtpDriver implements DriverInterface
         // Wrapper blocked (allow_url_fopen off or firewall): spool through disk.
         $spool = tempnam($this->spoolDir, 'fb-ftp-');
         if ($spool === false) {
-            throw new FsException('Cannot create a temporary file for the FTP download.');
+            throw new FsException(Lang::t('fs.temp_file'));
         }
         $this->spool[] = $spool;
         $sink = fopen($spool, 'w+b');
         if ($sink === false || !@ftp_fget($this->handle(), $sink, $path, FTP_BINARY)) {
             is_resource($sink) && fclose($sink);
-            throw new FsException('Cannot download: ' . $path);
+            throw new FsException(Lang::t('fs.download', ['path' => $path]));
         }
         rewind($sink);
 
@@ -224,7 +223,7 @@ final class FtpDriver implements DriverInterface
         $conn = $this->handle();
         $path = Path::normalise($path);
         if (!@ftp_fput($conn, $path, $handle, FTP_BINARY, $offset)) {
-            throw new FsException('Upload failed: ' . $path);
+            throw new FsException(Lang::t('fs.upload', ['path' => $path]));
         }
     }
 
@@ -415,7 +414,7 @@ final class FtpDriver implements DriverInterface
     {
         $this->connect();
         if ($this->conn === null) {
-            throw new ConnectionException('FTP connection is not open.');
+            throw new ConnectionException(Lang::t('fs.ftp_closed'));
         }
 
         return $this->conn;

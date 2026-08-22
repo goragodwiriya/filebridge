@@ -17,6 +17,7 @@ use FileBridge\App;
 use FileBridge\Fs\DriverFactory;
 use FileBridge\Fs\Path;
 use FileBridge\Security\Csrf;
+use FileBridge\Support\Lang;
 use FileBridge\Support\Mime;
 
 require __DIR__ . '/vendor/autoload.php';
@@ -32,13 +33,13 @@ function fail(int $status, string $message): never
 }
 
 if (!$app->ipAllowed()) {
-    fail(403, 'Address not allowed.');
+    fail(403, Lang::t('err.download_denied'));
 }
 if (!$app->auth()->check()) {
-    fail(401, 'Sign in first.');
+    fail(401, Lang::t('err.download_signin'));
 }
 if (!Csrf::check((string) ($_GET['token'] ?? ''))) {
-    fail(419, 'Security token expired - reload the page.');
+    fail(419, Lang::t('err.csrf'));
 }
 
 $siteId = (string) ($_GET['site'] ?? '');
@@ -47,7 +48,7 @@ $paths  = array_values(array_filter(array_map(
     (array) ($_GET['path'] ?? [])
 )));
 if ($paths === []) {
-    fail(400, 'Nothing to download.');
+    fail(400, Lang::t('err.download_empty'));
 }
 
 $site   = $app->sites()->findOrFail($siteId);
@@ -100,7 +101,7 @@ if ($single !== null && !$single->isDir()) {
 $zipPath = $app->base . '/storage/tmp/dl-' . bin2hex(random_bytes(6)) . '.zip';
 $zip     = new ZipArchive();
 if ($zip->open($zipPath, ZipArchive::CREATE | ZipArchive::OVERWRITE) !== true) {
-    fail(500, 'Cannot create the archive.');
+    fail(500, Lang::t('err.download_zip'));
 }
 
 /** Recursively add a remote path into the archive. */

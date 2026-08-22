@@ -4,6 +4,8 @@ declare(strict_types=1);
 
 namespace FileBridge\Fs;
 
+use FileBridge\Support\Lang;
+
 /**
  * Stream copying that honours the configured chunk size.
  *
@@ -63,7 +65,7 @@ final class Stream
             while ($written < $length) {
                 $step = fwrite($to, $written === 0 ? $data : substr($data, $written));
                 if ($step === false || $step === 0) {
-                    throw new FsException('Write failed after ' . ($copied + $written) . ' bytes.');
+                    throw new FsException(Lang::t('fs.short_write', ['bytes' => $copied + $written]));
                 }
                 $written += $step;
             }

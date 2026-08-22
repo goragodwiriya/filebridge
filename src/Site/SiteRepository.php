@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace FileBridge\Site;
 
 use FileBridge\Security\Crypto;
+use FileBridge\Support\Lang;
 use RuntimeException;
 
 /** sites.json persistence with the three secret fields encrypted at rest. */
@@ -42,20 +43,20 @@ final class SiteRepository
 
     public function findOrFail(string $id): Site
     {
-        return $this->find($id) ?? throw new RuntimeException('Unknown connection: ' . $id);
+        return $this->find($id) ?? throw new RuntimeException(Lang::t('err.unknown_site', ['id' => $id]));
     }
 
     public function save(array $input): Site
     {
         $site = Site::fromArray($input);
         if ($site->id === Site::LOCAL_ID) {
-            throw new RuntimeException('The local connection cannot be edited.');
+            throw new RuntimeException(Lang::t('err.local_readonly'));
         }
         if ($site->name === '') {
-            throw new RuntimeException('Give the connection a name.');
+            throw new RuntimeException(Lang::t('err.site_name'));
         }
         if ($site->protocol !== 'local' && $site->host === '') {
-            throw new RuntimeException('Host is required.');
+            throw new RuntimeException(Lang::t('err.site_host'));
         }
 
         $rows     = $this->read();
@@ -100,7 +101,7 @@ final class SiteRepository
     public function delete(string $id): void
     {
         if ($id === Site::LOCAL_ID) {
-            throw new RuntimeException('The local connection cannot be removed.');
+            throw new RuntimeException(Lang::t('err.local_undeletable'));
         }
         $rows = array_values(array_filter(
             $this->read(),
@@ -123,7 +124,7 @@ final class SiteRepository
     {
         $json = json_encode($rows, JSON_PRETTY_PRINT | JSON_UNESCAPED_SLASHES | JSON_UNESCAPED_UNICODE);
         if (@file_put_contents($this->file, $json, LOCK_EX) === false) {
-            throw new RuntimeException('Cannot write ' . $this->file . ' - check directory permissions.');
+            throw new RuntimeException(Lang::t('err.write_sites', ['file' => $this->file]));
         }
         @chmod($this->file, 0600);
     }

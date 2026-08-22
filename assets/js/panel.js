@@ -6,6 +6,7 @@ import {
     contextMenu, emptyState, skeleton, parentOf,
 } from './ui.js';
 import { confirm, prompt, chmodDialog, editorDialog, imageDialog, propertiesDialog } from './dialogs.js';
+import { t } from './i18n.js';
 
 const CHUNK = 400; // rows rendered per batch
 
@@ -121,8 +122,8 @@ export class Panel {
             this.el.dot.className = 'dot dot-danger';
             this.entries = [];
             this.view = [];
-            this.el.state.replaceChildren(emptyState('alert', 'Cannot open this folder', error.message,
-                el('button', { class: 'btn btn-sm', onclick: () => this.load(this.path || '') }, icon('refresh', 'icon icon-sm'), 'Try again')));
+            this.el.state.replaceChildren(emptyState('alert', t('panel.cannot_open'), error.message,
+                el('button', { class: 'btn btn-sm', onclick: () => this.load(this.path || '') }, icon('refresh', 'icon icon-sm'), t('panel.try_again'))));
             this.renderCrumbs();
             this.updateFoot();
         } finally {
@@ -142,7 +143,7 @@ export class Panel {
         crumbs.replaceChildren();
 
         const parts = (this.path || '/').split('/').filter(Boolean);
-        crumbs.append(el('button', { title: 'Root', onclick: () => this.load('/') }, '/'));
+        crumbs.append(el('button', { title: t('panel.root'), onclick: () => this.load('/') }, '/'));
 
         let walk = '';
         parts.forEach((part) => {
@@ -204,9 +205,9 @@ export class Panel {
         this.syncSortHeaders();
 
         if (this.view.length === 0 && this.entries.length > 0) {
-            this.el.state.replaceChildren(emptyState('search', 'No match', `Nothing here matches “${this.filter}”.`));
+            this.el.state.replaceChildren(emptyState('search', t('panel.no_match'), t('panel.no_match_text', { filter: this.filter })));
         } else if (this.entries.length === 0) {
-            this.el.state.replaceChildren(emptyState('folder-open', 'Empty folder', 'Drop files here or use the upload button.'));
+            this.el.state.replaceChildren(emptyState('folder-open', t('panel.empty'), t('panel.empty_text')));
         } else {
             this.el.state.replaceChildren();
         }
@@ -280,12 +281,18 @@ export class Panel {
         const folders = this.view.filter((entry) => entry.isDir).length;
         const files = this.view.length - folders;
         const size = this.view.reduce((sum, entry) => sum + (entry.isDir ? 0 : entry.size), 0);
-        this.el.stats.textContent = `${folders} folder${folders === 1 ? '' : 's'} · ${files} file${files === 1 ? '' : 's'} · ${bytes(size)}`;
+        this.el.stats.textContent = t('panel.stats', {
+            folders: t('count.folders', { count: folders }),
+            files: t('count.files', { count: files }),
+            size: bytes(size),
+        });
 
         const chosen = this.selection();
         const chosenSize = chosen.reduce((sum, entry) => sum + (entry.isDir ? 0 : entry.size), 0);
         this.el.selstats.className = chosen.length ? 'sel' : 'muted';
-        this.el.selstats.textContent = chosen.length ? `${chosen.length} selected · ${bytes(chosenSize)}` : '';
+        this.el.selstats.textContent = chosen.length
+            ? t('panel.selected', { count: chosen.length, size: bytes(chosenSize) })
+            : '';
         this.el.checkAll.classList.toggle('is-on', chosen.length > 0 && chosen.length === this.view.length);
         this.ctx.onSelection?.(this);
     }
@@ -405,21 +412,21 @@ export class Panel {
     }
 
     async mkdir() {
-        const name = await prompt('New folder', 'Folder name', '', { glyph: 'folder-plus', confirmLabel: 'Create' });
+        const name = await prompt(t('dlg.new_folder'), t('dlg.folder_name'), '', { glyph: 'folder-plus', confirmLabel: t('common.create') });
         if (!name) return;
         try {
             await call('fs.mkdir', { site: this.siteId, path: this.path, name });
-            toast('Folder created', name, 'ok');
+            toast(t('toast.folder_created'), name, 'ok');
             this.load(this.path);
         } catch (error) { notifyError(error); }
     }
 
     async rename(entry) {
-        const name = await prompt('Rename', 'New name', entry.name, { confirmLabel: 'Rename' });
+        const name = await prompt(t('dlg.rename'), t('dlg.new_name'), entry.name, { confirmLabel: t('common.rename') });
         if (!name || name === entry.name) return;
         try {
             await call('fs.rename', { site: this.siteId, path: entry.path, name });
-            toast('Renamed', `${entry.name} → ${name}`, 'ok');
+            toast(t('toast.renamed'), `${entry.name} → ${name}`, 'ok');
             this.load(this.path);
         } catch (error) { notifyError(error); }
     }
@@ -427,18 +434,28 @@ export class Panel {
     async remove(entries = this.selection()) {
         if (entries.length === 0) return;
         const size = entries.reduce((sum, entry) => sum + entry.size, 0);
-        const label = entries.length === 1 ? `“${entries[0].name}”` : `${entries.length} items`;
-        const ok = await confirm('Delete permanently?',
-            `${label} will be removed from ${findSite(this.siteId)?.name}. This cannot be undone.`,
-            { danger: true, confirmLabel: 'Delete', detail: `${bytes(size)}\n${entries.slice(0, 8).map((e) => e.path).join('\n')}${entries.length > 8 ? `\n… ${entries.length - 8} more` : ''}` });
+        const label = entries.length === 1
+            ? `“${entries[0].name}”`
+            : t('count.items', { count: entries.length });
+        const detail = [
+            bytes(size),
+            ...entries.slice(0, 8).map((entry) => entry.path),
+            entries.length > 8 ? t('dlg.more', { count: entries.length - 8 }) : null,
+        ].filter(Boolean).join('\n');
+        const ok = await confirm(t('dlg.delete_title'),
+            t('dlg.delete_text', { label, site: findSite(this.siteId)?.name || '' }),
+            { danger: true, confirmLabel: t('common.delete'), detail });
         if (!ok) return;
 
         try {
             const result = await call('fs.delete', { site: this.siteId, paths: entries.map((entry) => entry.path) });
             if (result.failed.length) {
-                toast(`Deleted ${result.deleted}, failed ${result.failed.length}`, result.failed[0].error, 'warn', 8000);
+                toast(
+                    t('toast.delete_partial', { done: result.deleted, failed: result.failed.length }),
+                    result.failed[0].error, 'warn', 8000
+                );
             } else {
-                toast('Deleted', `${result.deleted} item(s)`, 'ok');
+                toast(t('toast.deleted'), t('count.items', { count: result.deleted }), 'ok');
             }
             this.load(this.path);
         } catch (error) { notifyError(error); }
@@ -450,7 +467,9 @@ export class Panel {
         if (!mode) return;
         try {
             const result = await call('fs.chmod', { site: this.siteId, paths: entries.map((entry) => entry.path), mode });
-            toast('Permissions updated', `${result.applied} item(s) → ${mode}`, 'ok');
+            toast(t('toast.perms_updated'), t('toast.perms_applied', {
+                items: t('count.items', { count: result.applied }), mode,
+            }), 'ok');
             this.load(this.path, { keepSelection: true });
         } catch (error) { notifyError(error); }
     }
@@ -478,7 +497,7 @@ export class Panel {
         try {
             const file = await call('fs.read', { site: this.siteId, path: entry.path });
             if (file.binary) {
-                const ok = await confirm('Binary content', 'This file does not look like text. Open it anyway?', { confirmLabel: 'Open' });
+                const ok = await confirm(t('dlg.binary'), t('dlg.binary_text'), { confirmLabel: t('common.open') });
                 if (!ok) return;
             }
             await editorDialog(entry, file.content, async (content) => {
@@ -492,7 +511,7 @@ export class Panel {
 
     async uploadFiles(files) {
         if (!files.length) return;
-        const dismiss = toast('Uploading…', `${files.length} file(s)`, 'info', 0);
+        const dismiss = toast(t('toast.uploading'), t('count.files', { count: files.length }), 'info', 0);
 
         for (const file of files) {
             try {
@@ -519,7 +538,9 @@ export class Panel {
         }
 
         dismiss();
-        toast('Upload complete', `${files.length} file(s) → ${this.path}`, 'ok');
+        toast(t('toast.upload_done'), t('toast.upload_to', {
+            items: t('count.files', { count: files.length }), path: this.path,
+        }), 'ok');
         this.el.fileInput.value = '';
         this.load(this.path);
     }
@@ -543,7 +564,7 @@ export class Panel {
 
             const ghost = el('div', { class: 'drag-ghost' },
                 icon('copy', 'icon icon-sm'),
-                `${paths.length} item${paths.length === 1 ? '' : 's'}`);
+                t('count.items', { count: paths.length }));
             document.body.append(ghost);
             event.dataTransfer.setDragImage(ghost, 20, 16);
             setTimeout(() => ghost.remove(), 0);
@@ -614,36 +635,36 @@ export class Panel {
         const chosen = this.selection();
         const many = chosen.length > 1;
         const other = this.ctx.getOther(this);
-        const [openLabel, openIcon] = entry.isDir ? ['Open', 'folder-open']
-            : entry.image ? ['View', 'eye']
-                : entry.editable ? ['Edit', 'pencil'] : ['Download', 'download'];
+        const [openLabel, openIcon] = entry.isDir ? [t('menu.open'), 'folder-open']
+            : entry.image ? [t('menu.view'), 'eye']
+                : entry.editable ? [t('menu.edit'), 'pencil'] : [t('menu.download'), 'download'];
 
         contextMenu(event.clientX, event.clientY, [
-            { label: many ? `${chosen.length} items selected` : entry.name, header: true },
+            { label: many ? t('menu.selected', { count: chosen.length }) : entry.name, header: true },
             { label: openLabel, icon: openIcon, disabled: many, onSelect: () => this.open(entry), key: entry.image ? 'F3' : null },
-            { label: `Copy to ${other?.siteLabel() || 'other panel'}`, icon: this.side === 'left' ? 'arrow-right' : 'arrow-left', onSelect: () => this.ctx.copyToOther(this, 'copy'), key: 'F5' },
-            { label: 'Move to the other panel', icon: 'swap', onSelect: () => this.ctx.copyToOther(this, 'move'), key: 'F6' },
+            { label: t('menu.copy_to', { target: other?.siteLabel() || t('panel.other_panel') }), icon: this.side === 'left' ? 'arrow-right' : 'arrow-left', onSelect: () => this.ctx.copyToOther(this, 'copy'), key: 'F5' },
+            { label: t('menu.move_other'), icon: 'swap', onSelect: () => this.ctx.copyToOther(this, 'move'), key: 'F6' },
             'sep',
-            { label: 'Download', icon: 'download', onSelect: () => this.download(), key: 'Ctrl+D' },
-            { label: 'Rename', icon: 'pencil', disabled: many, onSelect: () => this.rename(entry), key: 'F2' },
-            { label: 'Permissions', icon: 'lock', disabled: this.capabilities.chmod === false, onSelect: () => this.chmod(), },
-            { label: 'Copy path', icon: 'copy', onSelect: () => this.copyPaths() },
-            { label: 'Properties', icon: 'info', disabled: many, onSelect: () => propertiesDialog(entry, findSite(this.siteId)?.name || '') },
+            { label: t('menu.download'), icon: 'download', onSelect: () => this.download(), key: 'Ctrl+D' },
+            { label: t('menu.rename'), icon: 'pencil', disabled: many, onSelect: () => this.rename(entry), key: 'F2' },
+            { label: t('menu.permissions'), icon: 'lock', disabled: this.capabilities.chmod === false, onSelect: () => this.chmod(), },
+            { label: t('menu.copy_path'), icon: 'copy', onSelect: () => this.copyPaths() },
+            { label: t('menu.properties'), icon: 'info', disabled: many, onSelect: () => propertiesDialog(entry, findSite(this.siteId)?.name || '') },
             'sep',
-            { label: 'Delete', icon: 'trash', danger: true, onSelect: () => this.remove(), key: 'Del' },
+            { label: t('menu.delete'), icon: 'trash', danger: true, onSelect: () => this.remove(), key: 'Del' },
         ]);
     }
 
     folderMenu(event) {
         contextMenu(event.clientX, event.clientY, [
             { label: this.path, header: true },
-            { label: 'New folder', icon: 'folder-plus', onSelect: () => this.mkdir(), key: 'F7' },
-            { label: 'Upload files', icon: 'upload', onSelect: () => this.el.fileInput.click() },
-            { label: 'Refresh', icon: 'refresh', onSelect: () => this.load(this.path), key: 'Ctrl+R' },
+            { label: t('menu.new_folder'), icon: 'folder-plus', onSelect: () => this.mkdir(), key: 'F7' },
+            { label: t('menu.upload'), icon: 'upload', onSelect: () => this.el.fileInput.click() },
+            { label: t('menu.refresh'), icon: 'refresh', onSelect: () => this.load(this.path), key: 'Ctrl+R' },
             'sep',
-            { label: 'Select all', icon: 'check', onSelect: () => this.toggleAll(), key: 'Ctrl+A' },
-            { label: this.showHidden ? 'Hide hidden files' : 'Show hidden files', icon: this.showHidden ? 'eye-off' : 'eye', onSelect: () => this.toggleHidden(), key: 'Ctrl+H' },
-            { label: 'Copy current path', icon: 'copy', onSelect: () => this.copyPaths([{ path: this.path }]) },
+            { label: t('menu.select_all'), icon: 'check', onSelect: () => this.toggleAll(), key: 'Ctrl+A' },
+            { label: this.showHidden ? t('menu.hide_hidden') : t('menu.show_hidden'), icon: this.showHidden ? 'eye-off' : 'eye', onSelect: () => this.toggleHidden(), key: 'Ctrl+H' },
+            { label: t('menu.copy_current_path'), icon: 'copy', onSelect: () => this.copyPaths([{ path: this.path }]) },
         ]);
     }
 
@@ -651,9 +672,9 @@ export class Panel {
         const text = entries.map((entry) => entry.path).join('\n');
         try {
             await navigator.clipboard.writeText(text);
-            toast('Copied to clipboard', text.split('\n')[0], 'ok', 2200);
+            toast(t('toast.copied'), text.split('\n')[0], 'ok', 2200);
         } catch {
-            toast('Clipboard blocked', text, 'warn', 6000);
+            toast(t('toast.clipboard_blocked'), text, 'warn', 6000);
         }
     }
 

@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace FileBridge\Security;
 
+use FileBridge\Support\Lang;
 use RuntimeException;
 
 /**
@@ -24,14 +25,14 @@ final class Auth
     public function createAdmin(string $username, string $password): void
     {
         if (!$this->needsSetup()) {
-            throw new RuntimeException('Setup has already been completed.');
+            throw new RuntimeException(Lang::t('err.setup_done'));
         }
         $username = trim($username);
         if (strlen($username) < 3) {
-            throw new RuntimeException('Username must be at least 3 characters.');
+            throw new RuntimeException(Lang::t('err.username_short'));
         }
         if (strlen($password) < 8) {
-            throw new RuntimeException('Password must be at least 8 characters.');
+            throw new RuntimeException(Lang::t('err.password_short'));
         }
         $this->save([[
             'username' => $username,
@@ -62,13 +63,13 @@ final class Auth
     public function changePassword(string $username, string $current, string $new): void
     {
         if (strlen($new) < 8) {
-            throw new RuntimeException('New password must be at least 8 characters.');
+            throw new RuntimeException(Lang::t('err.new_password_short'));
         }
         $users = $this->users();
         foreach ($users as $i => $user) {
             if ($user['username'] === $username) {
                 if (!password_verify($current, (string) $user['password'])) {
-                    throw new RuntimeException('Current password is incorrect.');
+                    throw new RuntimeException(Lang::t('err.password_wrong'));
                 }
                 $users[$i]['password'] = password_hash($new, PASSWORD_DEFAULT);
                 $this->save($users);
@@ -76,7 +77,7 @@ final class Auth
                 return;
             }
         }
-        throw new RuntimeException('User not found.');
+        throw new RuntimeException(Lang::t('err.user_missing'));
     }
 
     public function logout(): void
@@ -114,7 +115,7 @@ final class Auth
         $code = "<?php\n// FileBridge users - generated file, do not expose to the web.\nreturn "
             . var_export($users, true) . ";\n";
         if (@file_put_contents($this->usersFile, $code, LOCK_EX) === false) {
-            throw new RuntimeException('Cannot write ' . $this->usersFile);
+            throw new RuntimeException(Lang::t('err.write_users', ['file' => $this->usersFile]));
         }
         @chmod($this->usersFile, 0600);
     }

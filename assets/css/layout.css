@@ -816,6 +816,32 @@ table.files tbody tr.is-drop-target td {
     font-size: 11px;
     color: var(--dim);
 }
+/* Language picker on the sign in card - the only place it can live before
+   the top bar exists. */
+.lang-switch {
+    display: flex;
+    justify-content: center;
+    gap: 6px;
+}
+.lang-switch button {
+    padding: 4px 12px;
+    border: 1px solid var(--border);
+    border-radius: 999px;
+    background: transparent;
+    color: var(--muted);
+    font: inherit;
+    font-size: 11.5px;
+    cursor: pointer;
+    transition: color var(--fast) var(--ease), border-color var(--fast) var(--ease);
+}
+.lang-switch button:hover {
+    color: var(--text);
+    border-color: var(--border-strong);
+}
+.lang-switch button[aria-current="true"] {
+    color: var(--accent);
+    border-color: var(--accent);
+}
 /* ── chmod grid ──────────────────────────────────────────────────────────── */
 .perm-grid {
     width: 100%;

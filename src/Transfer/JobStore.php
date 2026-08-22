@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace FileBridge\Transfer;
 
+use FileBridge\Support\Lang;
 use RuntimeException;
 
 /** File-backed job queue. One JSON document per job plus a marker file for cancellation. */
@@ -40,7 +41,7 @@ final class JobStore
 
     public function getOrFail(string $id): Job
     {
-        return $this->get($id) ?? throw new RuntimeException('Unknown job: ' . $id);
+        return $this->get($id) ?? throw new RuntimeException(Lang::t('err.unknown_job', ['id' => $id]));
     }
 
     public function put(Job $job): void
@@ -48,7 +49,7 @@ final class JobStore
         $file = $this->file($job->id);
         $tmp  = $file . '.' . getmypid() . '.tmp';
         if (@file_put_contents($tmp, $this->encode($job->toArray())) === false) {
-            throw new RuntimeException('Cannot write job file: ' . $file);
+            throw new RuntimeException(Lang::t('err.write_job', ['file' => $file]));
         }
         @rename($tmp, $file); // atomic: readers never see a half written document
     }
@@ -106,7 +107,7 @@ final class JobStore
     {
         $file = $this->scratch($id, 'plan');
         if (@file_put_contents($file, $this->encode($buckets)) === false) {
-            throw new RuntimeException('Cannot write plan file: ' . $file);
+            throw new RuntimeException(Lang::t('err.write_plan', ['file' => $file]));
         }
     }
 

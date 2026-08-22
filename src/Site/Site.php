@@ -4,6 +4,8 @@ declare(strict_types=1);
 
 namespace FileBridge\Site;
 
+use FileBridge\Support\Lang;
+
 /** A saved connection profile. Secrets here are always plaintext in memory. */
 final class Site
 {
@@ -23,6 +25,7 @@ final class Site
         public string $rootPath = '',
         public bool $passive = true,
         public int $timeout = 20,
+        public int $workers = 0,             // parallel files; 0 = use the config default
         public string $colour = '#6366f1',
         public string $backend = 'auto',     // auto | ssh2 | phpseclib
         public string $created = '',
@@ -34,7 +37,7 @@ final class Site
     {
         return new self(
             id: self::LOCAL_ID,
-            name: 'This server',
+            name: Lang::t('site.local_name'),
             protocol: 'local',
             host: 'localhost',
             port: 0,
@@ -71,6 +74,7 @@ final class Site
             rootPath: trim((string) ($data['rootPath'] ?? '')),
             passive: (bool) ($data['passive'] ?? true),
             timeout: max(5, (int) ($data['timeout'] ?? 20)),
+            workers: max(0, min(16, (int) ($data['workers'] ?? 0))),
             colour: preg_match('/^#[0-9a-f]{6}$/i', (string) ($data['colour'] ?? '')) ? (string) $data['colour'] : '#6366f1',
             backend: in_array($data['backend'] ?? '', ['auto', 'ssh2', 'phpseclib'], true) ? (string) $data['backend'] : 'auto',
             created: (string) ($data['created'] ?? ''),
@@ -95,6 +99,7 @@ final class Site
             'rootPath'   => $this->rootPath,
             'passive'    => $this->passive,
             'timeout'    => $this->timeout,
+            'workers'    => $this->workers,
             'colour'     => $this->colour,
             'backend'    => $this->backend,
             'created'    => $this->created,
@@ -118,6 +123,7 @@ final class Site
             'rootPath'    => $this->rootPath,
             'passive'     => $this->passive,
             'timeout'     => $this->timeout,
+            'workers'     => $this->workers,
             'colour'      => $this->colour,
             'backend'     => $this->backend,
             'label'       => $this->protocol === 'local'

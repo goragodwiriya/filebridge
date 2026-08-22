@@ -11,6 +11,7 @@ use FileBridge\Fs\ExecCapable;
 use FileBridge\Fs\Path;
 use FileBridge\Site\Site;
 use FileBridge\Support\Bytes;
+use FileBridge\Support\Lang;
 use RuntimeException;
 use Throwable;
 
@@ -42,7 +43,7 @@ final class TransferManager
             (array) ($input['paths'] ?? [])
         )));
         if ($paths === []) {
-            throw new RuntimeException('Nothing was selected to transfer.');
+            throw new RuntimeException(Lang::t('err.nothing_to_move'));
         }
 
         $targetPath = Path::normalise((string) ($input['targetPath'] ?? '/'));
@@ -53,14 +54,12 @@ final class TransferManager
             foreach ($paths as $path) {
                 // A directory copied inside itself would recurse forever.
                 if (Path::contains($path, $targetPath)) {
-                    throw new RuntimeException('Cannot transfer "' . Path::name($path) . '" into itself.');
+                    throw new RuntimeException(Lang::t('err.into_itself', ['name' => Path::name($path)]));
                 }
                 // Same folder means every file would be written onto its own
                 // source. Only "keep both" makes sense there - it duplicates.
                 if (Path::parent($path) === $targetPath && $conflict !== 'rename') {
-                    throw new RuntimeException(
-                        'Source and destination are the same folder. Choose "Keep both" to duplicate instead.'
-                    );
+                    throw new RuntimeException(Lang::t('err.same_folder'));
                 }
             }
         }
@@ -77,7 +76,10 @@ final class TransferManager
             sourceBase: Path::normalise((string) ($input['sourceBase'] ?? Path::parent($paths[0]))),
             targetSite: $target->id,
             targetSiteName: $target->name,
-            targetPath: $targetPath
+            targetPath: $targetPath,
+            // The worker runs with no cookie of its own; carrying the language
+            // here keeps the job log in the language the operator queued it in.
+            lang: Lang::code()
         );
 
         $job = $this->app->jobs()->create($job);
@@ -124,6 +126,9 @@ final class TransferManager
             return;
         }
 
+        if ($job->lang !== '') {
+            Lang::set($job->lang);
+        }
         $job->status    = Job::SCANNING;
         $job->startedAt = time();
         $store->put($job);
@@ -158,7 +163,7 @@ final class TransferManager
             // Directories first, in one process: shards must never race here.
             $this->prepareDirs($job, $plan, $dst);
 
-            $workers = $this->workerCount(count($plan['files']));
+            $workers = $this->workerCount(count($plan['files']), $sourceSite, $targetSite);
             if ($workers < 2 || !$this->runParallel($job, $plan['files'], $src, $dst, $store, $workers)) {
                 $this->execute($job, $plan['files'], $src, $dst, $store);
             }
@@ -176,12 +181,13 @@ final class TransferManager
             $job->status     = Job::DONE;
             $job->current    = '';
             $job->finishedAt = time();
-            $job->note(sprintf(
-                'Finished: %d file(s), %s transferred%s.',
-                $job->filesDone,
-                Bytes::human($job->bytesDone),
-                $job->filesSkipped > 0 ? ', ' . $job->filesSkipped . ' skipped' : ''
-            ));
+            $job->note(Lang::t('job.finished', [
+                'files'   => Lang::t('count.files', ['count' => $job->filesDone]),
+                'bytes'   => Bytes::human($job->bytesDone),
+                'skipped' => $job->filesSkipped > 0
+                    ? Lang::t('job.finished_skip', ['count' => $job->filesSkipped])
+                    : '',
+            ]));
             $store->put($job);
             $this->app->logger()->audit($job->user, 'transfer.done', [
                 'job' => $job->id, 'files' => $job->filesDone, 'bytes' => $job->bytesDone,
@@ -229,17 +235,19 @@ final class TransferManager
             escapeshellarg(rtrim($job->targetPath, '/') . '/')
         );
 
-        $job->note('Same host on both sides - copying server-side.');
+        $job->note(Lang::t('job.same_host'));
         $out = $driver->exec($script);
         if (!str_contains($out, 'FB_OK')) {
-            $job->note('Server-side copy unavailable, streaming instead.');
+            $job->note(Lang::t('job.no_server_side'), 'warn');
 
             return false;
         }
 
         $job->filesDone  = count($job->sourcePaths);
         $job->filesTotal = $job->filesDone;
-        $job->note('Server-side ' . ($job->mode === 'move' ? 'move' : 'copy') . ' completed.');
+        $job->note(Lang::t('job.server_side_ok', [
+            'mode' => Lang::t($job->mode === 'move' ? 'job.mode_move' : 'job.mode_copy'),
+        ]));
 
         return true;
     }
@@ -260,7 +268,7 @@ final class TransferManager
             }
             $entry = $src->stat($path);
             if ($entry === null) {
-                $job->note('Skipped (not found): ' . $path, 'warn');
+                $job->note(Lang::t('job.not_found', ['path' => $path]), 'warn');
                 continue;
             }
             $destination = Path::join($job->targetPath, $entry->name);
@@ -279,7 +287,10 @@ final class TransferManager
 
         $job->filesTotal = count($plan['files']);
         $job->bytesTotal = array_sum(array_column($plan['files'], 'size'));
-        $job->note(sprintf('Planned %d file(s), %s.', $job->filesTotal, Bytes::human($job->bytesTotal)));
+        $job->note(Lang::t('job.planned', [
+            'files' => Lang::t('count.files', ['count' => $job->filesTotal]),
+            'bytes' => Bytes::human($job->bytesTotal),
+        ]));
         $store->put($job);
 
         return $plan;
@@ -335,7 +346,7 @@ final class TransferManager
             $destination = $this->resolveConflict($job, $dst, $file);
             // Never open a file for writing while reading from the same path.
             if ($destination === $file['src'] && $job->sourceSite === $job->targetSite) {
-                $job->note('Skipped (source and destination are the same file): ' . $file['src'], 'warn');
+                $job->note(Lang::t('job.same_file', ['path' => $file['src']]), 'warn');
                 $destination = null;
             }
             if ($destination === null) {
@@ -411,7 +422,7 @@ final class TransferManager
                     @proc_close($started);
                 }
                 $store->clearParts($job->id);
-                $job->note('Could not start the worker pool - copying in this process instead.', 'warn');
+                $job->note(Lang::t('job.pool_failed'), 'warn');
 
                 return false;
             }
@@ -422,7 +433,10 @@ final class TransferManager
         $src->disconnect();
         $dst->disconnect();
 
-        $job->note(sprintf('Copying %d file(s) across %d workers.', count($files), $workers));
+        $job->note(Lang::t('job.pool_started', [
+            'files'   => Lang::t('count.files', ['count' => count($files)]),
+            'workers' => $workers,
+        ]));
         $store->put($job);
 
         $this->supervise($job, $store, $procs, $workers);
@@ -435,6 +449,9 @@ final class TransferManager
     {
         $store = $this->app->jobs();
         $job   = $store->getOrFail($jobId);
+        if ($job->lang !== '') {
+            Lang::set($job->lang);
+        }
         $files = $store->plan($jobId)[$index] ?? [];
         if ($files === []) {
             $store->putPart($jobId, $index, ['status' => 'done']);
@@ -521,7 +538,7 @@ final class TransferManager
                 break;
             }
             if (($exits[$i] ?? 0) !== 0 && ($part['status'] ?? '') !== 'cancelled') {
-                $failure = sprintf('Worker %d stopped unexpectedly (exit code %d).', $i + 1, $exits[$i] ?? -1);
+                $failure = Lang::t('job.worker_died', ['index' => $i + 1, 'code' => $exits[$i] ?? -1]);
                 break;
             }
         }
@@ -628,14 +645,29 @@ final class TransferManager
         return is_resource($handle) ? $handle : null;
     }
 
-    private function workerCount(int $files): int
+    /**
+     * How many files to keep in flight for this job.
+     *
+     * Both ends have a say and the smaller number wins: a connection limited to
+     * two sessions stays at two even when the other side would happily take
+     * ten. A connection left at 0 follows `transfer_workers` from the config,
+     * which is what a fresh install does everywhere.
+     */
+    private function workerCount(int $files, Site $source, Site $target): int
     {
-        $configured = (int) ($this->app->config['transfer_workers'] ?? 1);
-        if ($configured < 2 || $files < 2 || !function_exists('proc_open') || $this->app->phpBinary() === null) {
+        if ($files < 2 || !function_exists('proc_open') || $this->app->phpBinary() === null) {
             return 1;
         }
+        $default = (int) ($this->app->config['transfer_workers'] ?? 1);
+        $limit   = min($this->siteWorkers($source, $default), $this->siteWorkers($target, $default));
 
-        return min($configured, $files, 16);
+        return max(1, min($limit, $files, 16));
+    }
+
+    /** A connection's own limit, or the config default when it has none. */
+    private function siteWorkers(Site $site, int $default): int
+    {
+        return $site->workers > 0 ? $site->workers : $default;
     }
 
     /** @return string|null destination path, or null to skip this file */
@@ -678,7 +710,7 @@ final class TransferManager
                 $entry = $src->stat($path);
                 $src->delete($path, $entry !== null && $entry->isDir());
             } catch (Throwable $e) {
-                $job->note('Could not remove source ' . $path . ': ' . $e->getMessage(), 'warn');
+                $job->note(Lang::t('job.remove_failed', ['path' => $path, 'error' => $e->getMessage()]), 'warn');
             }
         }
     }
@@ -688,7 +720,7 @@ final class TransferManager
         $job->status     = Job::CANCELLED;
         $job->current    = '';
         $job->finishedAt = time();
-        $job->note('Cancelled by the operator.', 'warn');
+        $job->note(Lang::t('job.cancelled'), 'warn');
         $store->put($job);
     }
 

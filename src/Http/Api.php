@@ -12,6 +12,7 @@ use FileBridge\Fs\Path;
 use FileBridge\Security\Csrf;
 use FileBridge\Site\Site;
 use FileBridge\Support\Bytes;
+use FileBridge\Support\Lang;
 use Throwable;
 
 /** Every JSON action the browser can call. */
@@ -34,7 +35,7 @@ final class Api
 
         try {
             if (!$this->app->ipAllowed()) {
-                Response::fail('Your address is not allowed to use this tool.', 'forbidden', 403);
+                Response::fail(Lang::t('err.forbidden_ip'), 'forbidden', 403);
             }
 
             // Reachable without a session.
@@ -46,10 +47,10 @@ final class Api
             };
 
             if (!$this->app->auth()->check()) {
-                Response::fail('Please sign in again.', 'unauthenticated', 401);
+                Response::fail(Lang::t('err.unauthenticated'), 'unauthenticated', 401);
             }
             if (!Csrf::check($this->request->token())) {
-                Response::fail('Security token expired - reload the page.', 'csrf', 419);
+                Response::fail(Lang::t('err.csrf'), 'csrf', 419);
             }
 
             match ($action) {
@@ -74,14 +75,14 @@ final class Api
                 'transfer.retry'   => $this->transferRetry(),
                 'transfer.clear'   => $this->transferClear(),
                 'transfer.run'     => $this->transferRun(),
-                default            => Response::fail('Unknown action: ' . $action, 'unknown_action', 404),
+                default            => Response::fail(Lang::t('err.unknown_action', ['action' => $action]), 'unknown_action', 404),
             };
         } catch (Throwable $e) {
             $this->app->logger()->error($e->getMessage(), ['action' => $action]);
             Response::fail($e->getMessage(), 'exception', 400);
         }
 
-        Response::fail('No response produced.', 'empty', 500);
+        Response::fail(Lang::t('err.empty'), 'empty', 500);
     }
 
     // ------------------------------------------------------------------- state
@@ -96,11 +97,15 @@ final class Api
             'user'       => $auth->username(),
             'csrf'       => Csrf::token(),
             'settings'   => [
+                'language'      => Lang::code(),
                 'theme'         => $this->app->config['default_theme'],
                 'showHidden'    => (bool) $this->app->config['show_hidden'],
                 'dateFormat'    => $this->app->config['date_format'],
                 'maxEditSize'   => (int) $this->app->config['max_edit_size'],
                 'maxUploadSize' => $this->uploadLimit(),
+                // The dialog shows this as the "0 means…" default next to a
+                // connection's own worker count.
+                'transferWorkers' => max(1, (int) ($this->app->config['transfer_workers'] ?? 1)),
             ],
             'backends'   => [
                 'ssh2'      => extension_loaded('ssh2'),
@@ -119,7 +124,7 @@ final class Api
     {
         $auth = $this->app->auth();
         if (!$auth->needsSetup()) {
-            Response::fail('Setup has already been completed.', 'setup_done');
+            Response::fail(Lang::t('err.setup_done'), 'setup_done');
         }
         $auth->createAdmin($this->request->str('username'), $this->request->str('password'));
         $auth->attempt($this->request->str('username'), $this->request->str('password'));
@@ -133,7 +138,7 @@ final class Api
         $limiter = $this->app->rateLimit();
         if ($limiter->tooManyAttempts('login')) {
             Response::fail(
-                'Too many attempts. Try again in ' . ceil($limiter->retryAfter('login') / 60) . ' minute(s).',
+                Lang::t('err.rate_limited', ['minutes' => ceil($limiter->retryAfter('login') / 60)]),
                 'rate_limited',
                 429
             );
@@ -143,7 +148,7 @@ final class Api
         if (!$this->app->auth()->attempt($username, $this->request->str('password'))) {
             $limiter->hit('login');
             $this->app->logger()->audit($username, 'auth.failed');
-            Response::fail('Incorrect username or password.', 'bad_credentials', 401);
+            Response::fail(Lang::t('err.bad_credentials'), 'bad_credentials', 401);
         }
         $limiter->clear('login');
         $this->app->logger()->audit($username, 'auth.login');
@@ -282,7 +287,7 @@ final class Api
         $driver = $this->driver($this->request->str('site'));
         $name   = Path::safeName($this->request->str('name'));
         if ($name === '') {
-            Response::fail('Enter a folder name.');
+            Response::fail(Lang::t('err.folder_name'));
         }
         $path = Path::join($this->request->str('path'), $name);
         $driver->mkdir($path);
@@ -297,7 +302,7 @@ final class Api
         $from   = $this->request->str('path');
         $name   = Path::safeName($this->request->str('name'));
         if ($name === '') {
-            Response::fail('Enter a name.');
+            Response::fail(Lang::t('err.name_required'));
         }
         $to = Path::join(Path::parent($from), $name);
         if ($to === $from) {
@@ -317,7 +322,7 @@ final class Api
         foreach ($this->request->arr('paths') as $raw) {
             $path = Path::normalise((string) $raw);
             if ($path === '/') {
-                $failed[] = ['path' => $path, 'error' => 'Refusing to delete the root directory.'];
+                $failed[] = ['path' => $path, 'error' => Lang::t('err.delete_root')];
                 continue;
             }
             try {
@@ -338,7 +343,7 @@ final class Api
         $driver = $this->driver($this->request->str('site'));
         $mode   = $this->request->str('mode');
         if (!preg_match('/^[0-7]{3,4}$/', $mode)) {
-            Response::fail('Permissions must look like 755 or 0644.');
+            Response::fail(Lang::t('err.perm_format'));
         }
         $octal   = (int) octdec($mode);
         $applied = 0;
@@ -358,14 +363,14 @@ final class Api
         $entry  = $driver->stat($path);
         $limit  = (int) $this->app->config['max_edit_size'];
         if ($entry !== null && $entry->size > $limit) {
-            Response::fail('File is larger than ' . Bytes::human($limit) . ' - download it instead.', 'too_large');
+            Response::fail(Lang::t('err.too_large', ['limit' => Bytes::human($limit)]), 'too_large');
         }
 
         $handle  = $driver->readStream($path);
         $content = (string) stream_get_contents($handle, $limit + 1);
         fclose($handle);
         if (strlen($content) > $limit) {
-            Response::fail('File is larger than ' . Bytes::human($limit) . ' - download it instead.', 'too_large');
+            Response::fail(Lang::t('err.too_large', ['limit' => Bytes::human($limit)]), 'too_large');
         }
 
         Response::ok([
@@ -400,7 +405,7 @@ final class Api
         $dir    = Path::normalise((string) ($_POST['path'] ?? '/'));
         $name   = Path::safeName((string) ($_POST['name'] ?? ''));
         if ($name === '' || !isset($_FILES['file']) || $_FILES['file']['error'] !== UPLOAD_ERR_OK) {
-            Response::fail('Upload failed before it reached the server.', 'upload_error');
+            Response::fail(Lang::t('err.upload_failed'), 'upload_error');
         }
 
         $chunkIndex = (int) ($_POST['chunkIndex'] ?? 0);

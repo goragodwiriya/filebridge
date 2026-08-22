@@ -1,5 +1,7 @@
 // Thin JSON transport. Every mutating call carries the CSRF token.
 
+import { t } from './i18n.js';
+
 export const state = {
     csrf: '',
     user: '',
@@ -35,12 +37,12 @@ export async function call(action, payload = {}) {
     try {
         body = await response.json();
     } catch {
-        throw new ApiError('The server returned an unreadable response.', 'bad_json', response.status);
+        throw new ApiError(t('err.bad_json'), 'bad_json', response.status);
     }
 
     if (!body.ok) {
         const error = body.error || {};
-        throw new ApiError(error.message || 'Request failed.', error.code || 'error', response.status);
+        throw new ApiError(error.message || t('err.request_failed'), error.code || 'error', response.status);
     }
 
     return body.data;
@@ -64,16 +66,16 @@ export function upload(fields, file, onProgress) {
             try {
                 body = JSON.parse(request.responseText);
             } catch {
-                reject(new ApiError('Upload response was unreadable.', 'bad_json', request.status));
+                reject(new ApiError(t('err.upload_reply'), 'bad_json', request.status));
                 return;
             }
             if (!body.ok) {
-                reject(new ApiError(body.error?.message || 'Upload failed.', body.error?.code, request.status));
+                reject(new ApiError(body.error?.message || t('err.upload_failed'), body.error?.code, request.status));
                 return;
             }
             resolve(body.data);
         });
-        request.addEventListener('error', () => reject(new ApiError('Network error during upload.', 'network', 0)));
+        request.addEventListener('error', () => reject(new ApiError(t('err.upload_network'), 'network', 0)));
         request.send(form);
     });
 }

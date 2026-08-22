@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace FileBridge\Fs;
 
 use FileBridge\Security\HostKeyStore;
+use FileBridge\Support\Lang;
 use phpseclib3\Crypt\Common\PrivateKey;
 use phpseclib3\Crypt\PublicKeyLoader;
 use Throwable;
@@ -52,29 +53,28 @@ final class SftpSsh2Driver implements DriverInterface, ExecCapable
         // configured timeout meaningful and turns a hang into a clear error.
         $probe = @fsockopen($this->host, $this->port, $errno, $errstr, $this->timeout);
         if ($probe === false) {
-            throw new ConnectionException(sprintf(
-                'Cannot reach %s:%d - %s',
-                $this->host,
-                $this->port,
-                $errstr !== '' ? $errstr : 'no response within ' . $this->timeout . 's'
-            ));
+            throw new ConnectionException(Lang::t('fs.unreachable', [
+                'host'  => $this->host,
+                'port'  => $this->port,
+                'error' => $errstr !== '' ? $errstr : Lang::t('fs.no_response', ['timeout' => $this->timeout]),
+            ]));
         }
         fclose($probe);
 
         $conn = @ssh2_connect($this->host, $this->port);
         if ($conn === false) {
-            throw new ConnectionException('SSH handshake failed with ' . $this->host . ':' . $this->port);
+            throw new ConnectionException(Lang::t('fs.ssh_handshake', ['host' => $this->host, 'port' => $this->port]));
         }
         $this->conn = $conn;
         $this->checkHostKey();
 
         if (!$this->authenticate()) {
-            throw new ConnectionException('SSH authentication failed for user "' . $this->username . '".');
+            throw new ConnectionException(Lang::t('fs.ssh_auth', ['user' => $this->username]));
         }
 
         $sftp = @ssh2_sftp($conn);
         if ($sftp === false) {
-            throw new ConnectionException('The server did not start an SFTP subsystem.');
+            throw new ConnectionException(Lang::t('fs.ssh_subsystem'));
         }
         $this->sftp   = $sftp;
         $this->banner = 'SFTP - ' . $this->host . ' (ext-ssh2)';
@@ -105,7 +105,7 @@ final class SftpSsh2Driver implements DriverInterface, ExecCapable
         $path   = Path::normalise($path);
         $handle = @opendir($this->wrap($path));
         if ($handle === false) {
-            throw new FsException('Cannot list directory: ' . $path);
+            throw new FsException(Lang::t('fs.list', ['path' => $path]));
         }
 
         $entries = [];
@@ -177,7 +177,7 @@ final class SftpSsh2Driver implements DriverInterface, ExecCapable
             return;
         }
         if (!@ssh2_sftp_mkdir($this->sftp, $path, 0755, true) && !$this->isDir($path)) {
-            throw new FsException('Cannot create directory: ' . $path);
+            throw new FsException(Lang::t('fs.mkdir', ['path' => $path]));
         }
     }
 
@@ -188,7 +188,7 @@ final class SftpSsh2Driver implements DriverInterface, ExecCapable
 
         if (!$this->isDir($path)) {
             if (!@ssh2_sftp_unlink($this->sftp, $path)) {
-                throw new FsException('Cannot delete: ' . $path);
+                throw new FsException(Lang::t('fs.delete', ['path' => $path]));
             }
 
             return;
@@ -199,7 +199,7 @@ final class SftpSsh2Driver implements DriverInterface, ExecCapable
             }
         }
         if (!@ssh2_sftp_rmdir($this->sftp, $path)) {
-            throw new FsException('Cannot delete directory: ' . $path);
+            throw new FsException(Lang::t('fs.rmdir', ['path' => $path]));
         }
     }
 
@@ -214,7 +214,7 @@ final class SftpSsh2Driver implements DriverInterface, ExecCapable
     {
         $this->connect();
         if (!@ssh2_sftp_rename($this->sftp, Path::normalise($from), Path::normalise($to))) {
-            throw new FsException('Rename failed: ' . $from);
+            throw new FsException(Lang::t('fs.rename', ['path' => $from]));
         }
     }
 
@@ -222,7 +222,7 @@ final class SftpSsh2Driver implements DriverInterface, ExecCapable
     {
         $this->connect();
         if (!@ssh2_sftp_chmod($this->sftp, Path::normalise($path), $mode)) {
-            throw new FsException('chmod failed: ' . $path);
+            throw new FsException(Lang::t('fs.chmod', ['path' => $path]));
         }
     }
 
@@ -231,7 +231,7 @@ final class SftpSsh2Driver implements DriverInterface, ExecCapable
         $this->connect();
         $handle = @fopen($this->wrap(Path::normalise($path)), 'rb');
         if (!is_resource($handle)) {
-            throw new FsException('Cannot read: ' . $path);
+            throw new FsException(Lang::t('fs.read', ['path' => $path]));
         }
         Stream::prepare($handle);
 
@@ -244,7 +244,7 @@ final class SftpSsh2Driver implements DriverInterface, ExecCapable
         $url = $this->wrap(Path::normalise($path));
         $out = @fopen($url, $offset > 0 ? 'r+b' : 'wb');
         if (!is_resource($out)) {
-            throw new FsException('Cannot write: ' . $path);
+            throw new FsException(Lang::t('fs.write', ['path' => $path]));
         }
         if ($offset > 0) {
             fseek($out, $offset);
@@ -270,7 +270,7 @@ final class SftpSsh2Driver implements DriverInterface, ExecCapable
         $this->connect();
         $stream = @ssh2_exec($this->conn, $command);
         if ($stream === false) {
-            throw new FsException('Remote command failed: ' . $command);
+            throw new FsException(Lang::t('fs.ssh_command', ['command' => $command]));
         }
         stream_set_blocking($stream, true);
         $out = (string) stream_get_contents($stream);
@@ -319,12 +319,10 @@ final class SftpSsh2Driver implements DriverInterface, ExecCapable
         try {
             $key = PublicKeyLoader::load($this->privateKey, $this->passphrase !== '' ? $this->passphrase : false);
         } catch (Throwable $e) {
-            throw new ConnectionException('Private key could not be loaded: ' . $e->getMessage());
+            throw new ConnectionException(Lang::t('fs.key_load', ['error' => $e->getMessage()]));
         }
         if (!$key instanceof PrivateKey) {
-            throw new ConnectionException(
-                'That key is a public key. Paste the private half (the file without the .pub suffix).'
-            );
+            throw new ConnectionException(Lang::t('fs.key_public'));
         }
         $pub = $key->getPublicKey()->toString('OpenSSH');
 
@@ -378,14 +376,12 @@ final class SftpSsh2Driver implements DriverInterface, ExecCapable
         $result = $this->hostKeys->verify($this->host, $this->port, $fp);
 
         if ($result['status'] === 'changed') {
-            throw new ConnectionException(sprintf(
-                "HOST KEY CHANGED for %s:%d.\nExpected %s\nGot      %s\n"
-                . 'Someone could be intercepting the connection. Clear the pinned key in Settings if this was intended.',
-                $this->host,
-                $this->port,
-                (string) $result['expected'],
-                $fp
-            ));
+            throw new ConnectionException(Lang::t('fs.hostkey_changed', [
+                'host'     => $this->host,
+                'port'     => $this->port,
+                'expected' => (string) $result['expected'],
+                'got'      => $fp,
+            ]));
         }
     }
 }

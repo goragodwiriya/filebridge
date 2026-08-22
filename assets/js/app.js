@@ -6,6 +6,7 @@ import { siteDialog, confirm, helpDialog, prompt } from './dialogs.js';
 import { Panel } from './panel.js';
 import { Queue } from './transfer.js';
 import { initPwa, applyThemeColour } from './pwa.js';
+import { t, lang, LANGUAGES, setLanguage } from './i18n.js';
 
 const app = {
     panels: {},
@@ -53,12 +54,15 @@ function showAuth(info) {
 
     screen.hidden = false;
     $('#app').hidden = true;
-    $('#auth-lead').textContent = setup
-        ? 'Create the administrator account to get started.'
-        : 'Sign in to manage your connections.';
-    $('#auth-submit').textContent = setup ? 'Create account' : 'Sign in';
+    $('#auth-lead').textContent = setup ? t('auth.lead_setup') : t('auth.lead');
+    $('#auth-submit').textContent = setup ? t('auth.create') : t('auth.signin');
     $('#auth-confirm-field').hidden = !setup;
     $('#auth-pass').autocomplete = setup ? 'new-password' : 'current-password';
+
+    $('#auth-lang').addEventListener('click', (event) => {
+        const button = event.target.closest('button[data-lang]');
+        if (button) setLanguage(button.dataset.lang);
+    });
 
     form.addEventListener('submit', async (event) => {
         event.preventDefault();
@@ -68,7 +72,7 @@ function showAuth(info) {
 
         if (setup && password !== $('#auth-confirm').value) {
             error.hidden = false;
-            error.querySelector('span').textContent = 'The two passwords do not match.';
+            error.querySelector('span').textContent = t('auth.mismatch');
             return;
         }
 
@@ -169,8 +173,8 @@ function other(panel) {
 
 function renderBackendInfo() {
     const rows = [
-        ['SFTP', state.backends.ssh2 ? 'ext-ssh2 (fast)' : (state.backends.phpseclib ? 'phpseclib' : 'unavailable'), state.backends.ssh2 || state.backends.phpseclib],
-        ['FTP / FTPS', state.backends.ftp ? 'ext-ftp' : 'unavailable', state.backends.ftp],
+        ['SFTP', state.backends.ssh2 ? t('nav.ssh2') : (state.backends.phpseclib ? 'phpseclib' : t('nav.unavailable')), state.backends.ssh2 || state.backends.phpseclib],
+        ['FTP / FTPS', state.backends.ftp ? 'ext-ftp' : t('nav.unavailable'), state.backends.ftp],
     ];
     $('#backend-info').replaceChildren(...rows.map(([label, value, ok]) =>
         el('div', { class: 'row' },
@@ -202,7 +206,7 @@ function renderSites() {
         mounted.length ? el('span', { class: 'mount', text: mounted.join(' ') }) : null,
         el('span', { class: 'side' },
             entry.id === 'local' ? null : el('button', {
-                class: 'icon-btn', title: 'Edit',
+                class: 'icon-btn', title: t('panel.edit_site'),
                 onclick: (event) => { event.stopPropagation(); editSite(entry); },
             }, icon('settings', 'icon icon-sm'))));
 
@@ -218,12 +222,12 @@ function openSite(id) {
 function siteMenu(event, entry) {
     contextMenu(event.clientX, event.clientY, [
         { label: entry.name, header: true },
-        { label: 'Open in the left panel', icon: 'arrow-left', onSelect: () => app.panels.left.connect(entry.id).then(saveLayout) },
-        { label: 'Open in the right panel', icon: 'arrow-right', onSelect: () => app.panels.right.connect(entry.id).then(saveLayout) },
+        { label: t('menu.open_left'), icon: 'arrow-left', onSelect: () => app.panels.left.connect(entry.id).then(saveLayout) },
+        { label: t('menu.open_right'), icon: 'arrow-right', onSelect: () => app.panels.right.connect(entry.id).then(saveLayout) },
         'sep',
-        { label: 'Edit', icon: 'settings', disabled: entry.id === 'local', onSelect: () => editSite(entry) },
-        { label: 'Duplicate', icon: 'copy', disabled: entry.id === 'local', onSelect: () => duplicateSite(entry) },
-        { label: 'Delete', icon: 'trash', danger: true, disabled: entry.id === 'local', onSelect: () => deleteSite(entry) },
+        { label: t('menu.edit'), icon: 'settings', disabled: entry.id === 'local', onSelect: () => editSite(entry) },
+        { label: t('menu.duplicate'), icon: 'copy', disabled: entry.id === 'local', onSelect: () => duplicateSite(entry) },
+        { label: t('menu.delete'), icon: 'trash', danger: true, disabled: entry.id === 'local', onSelect: () => deleteSite(entry) },
     ]);
 }
 
@@ -236,7 +240,7 @@ async function editSite(entry) {
 }
 
 async function duplicateSite(entry) {
-    const copy = { ...entry, id: '', name: `${entry.name} (copy)` };
+    const copy = { ...entry, id: '', name: t('site.copy_suffix', { name: entry.name }) };
     const saved = await siteDialog(copy);
     if (saved) {
         renderSites();
@@ -245,8 +249,8 @@ async function duplicateSite(entry) {
 }
 
 async function deleteSite(entry) {
-    const ok = await confirm('Remove connection?', `“${entry.name}” will be deleted from this tool. The server itself is untouched.`, {
-        danger: true, confirmLabel: 'Remove',
+    const ok = await confirm(t('dlg.remove_site'), t('dlg.remove_site_text', { name: entry.name }), {
+        danger: true, confirmLabel: t('common.remove'),
     });
     if (!ok) return;
     try {
@@ -257,7 +261,7 @@ async function deleteSite(entry) {
             panel.fillSites();
             if (panel.siteId === entry.id) panel.connect('local');
         });
-        toast('Connection removed', entry.name, 'ok');
+        toast(t('toast.site_removed'), entry.name, 'ok');
     } catch (error) { notifyError(error); }
 }
 
@@ -267,7 +271,7 @@ function transferBetween(sourcePanel, mode) {
     const targetPanel = other(sourcePanel);
     const paths = sourcePanel.selectedPaths();
     if (paths.length === 0) {
-        toast('Nothing selected', 'Pick files or folders first.', 'warn', 2600);
+        toast(t('toast.nothing_selected'), t('toast.nothing_first'), 'warn', 2600);
         return;
     }
     startTransfer({
@@ -288,7 +292,12 @@ function startTransfer(payload) {
 
 function onJobFinished(job) {
     const kind = job.status === 'done' ? 'ok' : job.status === 'error' ? 'error' : 'warn';
-    toast(`Transfer ${job.status}`, `${job.title} · ${job.filesDone} file(s)`, kind, job.status === 'error' ? 9000 : 4000);
+    toast(
+        t('toast.transfer_status', { status: t(`status.${job.status}`) }),
+        t('toast.transfer_summary', { title: job.title, files: t('count.files', { count: job.filesDone }) }),
+        kind,
+        job.status === 'error' ? 9000 : 4000
+    );
     Object.values(app.panels).forEach((panel) => {
         if (panel.siteId === job.targetSite || panel.siteId === job.sourceSite) {
             panel.load(panel.path, { keepSelection: true });
@@ -353,10 +362,20 @@ function wireChrome() {
         const box = event.currentTarget.getBoundingClientRect();
         contextMenu(box.right - 214, box.bottom + 6, [
             { label: state.user, header: true },
-            { label: 'Change password', icon: 'key', onSelect: changePassword },
-            { label: 'Keyboard shortcuts', icon: 'info', onSelect: () => helpDialog() },
+            { label: t('auth.change_password'), icon: 'key', onSelect: changePassword },
+            { label: t('keys.title'), icon: 'info', onSelect: () => helpDialog() },
             'sep',
-            { label: 'Sign out', icon: 'logout', danger: true, onSelect: signOut },
+            { label: t('app.language'), header: true },
+            // One row per language rather than a submenu: two entries fit, and
+            // the tick shows which one is live without opening anything.
+            ...Object.entries(LANGUAGES).map(([code, label]) => ({
+                label,
+                icon: code === lang ? 'check' : 'globe',
+                disabled: code === lang,
+                onSelect: () => setLanguage(code),
+            })),
+            'sep',
+            { label: t('auth.signout'), icon: 'logout', danger: true, onSelect: signOut },
         ]);
     });
 
@@ -387,13 +406,13 @@ function applyMobileSide(side) {
 }
 
 async function changePassword() {
-    const current = await prompt('Change password', 'Current password', '', { glyph: 'key', confirmLabel: 'Next' });
+    const current = await prompt(t('auth.change_password'), t('auth.current_password'), '', { glyph: 'key', confirmLabel: t('auth.next') });
     if (!current) return;
-    const next = await prompt('Change password', 'New password (8+ characters)', '', { glyph: 'key', confirmLabel: 'Update' });
+    const next = await prompt(t('auth.change_password'), t('auth.new_password'), '', { glyph: 'key', confirmLabel: t('auth.update') });
     if (!next) return;
     try {
         await call('auth.password', { current, new: next });
-        toast('Password updated', 'Use it the next time you sign in.', 'ok');
+        toast(t('auth.updated'), t('auth.updated_text'), 'ok');
     } catch (error) { notifyError(error); }
 }
 

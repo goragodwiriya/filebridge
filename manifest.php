@@ -3,6 +3,7 @@
 declare(strict_types=1);
 
 use FileBridge\App;
+use FileBridge\Support\Lang;
 
 require __DIR__ . '/vendor/autoload.php';
 
@@ -24,9 +25,11 @@ header('Cache-Control: no-cache');
 
 echo json_encode([
     'id'          => './',
-    'name'        => $name . ' · Server to server transfers',
+    'lang'        => Lang::code(),
+    'dir'         => 'auto',
+    'name'        => $name . ' · ' . Lang::t('app.tagline'),
     'short_name'  => $name,
-    'description' => 'Two panel file manager for local, SFTP and FTP servers, with server to server transfers that never pass through the browser.',
+    'description' => Lang::t('app.description'),
     'start_url'   => './',
     'scope'       => './',
     'display'     => 'standalone',

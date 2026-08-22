@@ -105,9 +105,23 @@
             <path d="m17 11 2 2 2-2M7 13l-2-2-2 2"/>
         </svg>
     </span>
-    <h1>No connection to the server</h1>
-    <p>FileBridge does its work on the server, so it needs a route to it. Check the network and try again.</p>
-    <button type="button" onclick="location.reload()">Try again</button>
+    <h1 data-th="ติดต่อเซิร์ฟเวอร์ไม่ได้">No connection to the server</h1>
+    <p data-th="FileBridge ทำงานอยู่บนเซิร์ฟเวอร์ จึงต้องติดต่อเซิร์ฟเวอร์ให้ได้ก่อน กรุณาตรวจสอบเครือข่ายแล้วลองใหม่">FileBridge does its work on the server, so it needs a route to it. Check the network and try again.</p>
+    <button type="button" data-th="ลองอีกครั้ง" onclick="location.reload()">Try again</button>
 </div>
+<script>
+    // There is no server to ask for a translation here, so the language the app
+    // was last opened in is read from localStorage and the Thai wording that
+    // travels with this page is swapped in.
+    try {
+        if (localStorage.getItem('fb.lang') === 'th') {
+            document.documentElement.lang = 'th';
+            document.title = 'ออฟไลน์ · FileBridge';
+            document.querySelectorAll('[data-th]').forEach(function (node) {
+                node.textContent = node.dataset.th;
+            });
+        }
+    } catch (e) {}
+</script>
 </body>
 </html>

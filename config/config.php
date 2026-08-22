@@ -21,7 +21,12 @@ return [
 
     // Transfer engine
     'chunk_size' => 262144, // 256 KB per read/write chunk
-    'transfer_workers' => 4, // files copied in parallel per job (1 = one at a time)
+    // Files copied in parallel per job (1 = one at a time). This is only the
+    // default: every connection can carry its own limit in its edit dialog, so
+    // a server that allows two sessions and one that allows ten can share this
+    // install without anyone editing a config file. The slower side of a
+    // transfer wins - see TransferManager::workerCount().
+    'transfer_workers' => 4,
     'max_edit_size' => 2097152, // 2 MB - largest file openable in the text editor
     'max_upload_size' => 0, // 0 = use PHP's upload_max_filesize
     'job_retention' => 86400, // seconds to keep finished jobs on disk
@@ -49,6 +54,7 @@ return [
     'verify_host_key' => true, // trust-on-first-use SSH fingerprint pinning
 
     // UI defaults
+    'default_language' => 'auto', // auto | en | th - auto follows the browser
     'default_theme' => 'dark', // dark | light
     'show_hidden' => false,
     'date_format' => 'Y-m-d H:i'

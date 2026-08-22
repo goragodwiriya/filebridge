@@ -10,6 +10,7 @@ use FileBridge\Security\Crypto;
 use FileBridge\Security\HostKeyStore;
 use FileBridge\Security\RateLimit;
 use FileBridge\Site\SiteRepository;
+use FileBridge\Support\Lang;
 use FileBridge\Support\Logger;
 use FileBridge\Transfer\JobStore;
 use FileBridge\Transfer\TransferManager;
@@ -22,7 +23,7 @@ final class App
      * on every asset, so index.php, manifest.php and sw.php always agree on
      * which files belong together.
      */
-    public const VERSION = '1.3';
+    public const VERSION = '1.4';
 
     private static ?self $instance = null;
 
@@ -46,6 +47,7 @@ final class App
             $config = array_merge($config, (array) require $local);
         }
         $this->config = $config;
+        Lang::boot($base . '/lang', (string) ($config['default_language'] ?? 'auto'));
         Stream::useChunkSize((int) ($config['chunk_size'] ?? Stream::DEFAULT_CHUNK));
         $this->ensureStorage();
     }
@@ -210,7 +212,8 @@ final class App
         return ($ipLong & $mask) === ($subnetLong & $mask);
     }
 
-    private function cookiePath(): string
+    /** Directory the app is served from - the scope of its cookies. */
+    public function cookiePath(): string
     {
         $dir = str_replace('\\', '/', dirname($_SERVER['SCRIPT_NAME'] ?? '/'));
 

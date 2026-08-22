@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace FileBridge\Fs;
 
+use FileBridge\Support\Lang;
 use FilesystemIterator;
 use RecursiveDirectoryIterator;
 use RecursiveIteratorIterator;
@@ -21,7 +22,7 @@ final class LocalDriver implements DriverInterface
     public function connect(): void
     {
         if ($this->roots === []) {
-            throw new ConnectionException('No local roots are configured.');
+            throw new ConnectionException(Lang::t('fs.no_roots'));
         }
     }
 
@@ -40,11 +41,11 @@ final class LocalDriver implements DriverInterface
     {
         $path = $this->guard($path);
         if (!is_dir($path)) {
-            throw new FsException('Not a directory: ' . $path);
+            throw new FsException(Lang::t('fs.not_dir', ['path' => $path]));
         }
         $handle = @opendir($path);
         if ($handle === false) {
-            throw new FsException('Permission denied: ' . $path);
+            throw new FsException(Lang::t('fs.denied', ['path' => $path]));
         }
 
         $entries = [];
@@ -82,7 +83,7 @@ final class LocalDriver implements DriverInterface
             return;
         }
         if (!@mkdir($path, 0755, true) && !is_dir($path)) {
-            throw new FsException('Cannot create directory: ' . $path);
+            throw new FsException(Lang::t('fs.mkdir', ['path' => $path]));
         }
     }
 
@@ -91,7 +92,7 @@ final class LocalDriver implements DriverInterface
         $path = $this->guard($path);
         if (is_link($path) || is_file($path)) {
             if (!@unlink($path)) {
-                throw new FsException('Cannot delete: ' . $path);
+                throw new FsException(Lang::t('fs.delete', ['path' => $path]));
             }
 
             return;
@@ -101,7 +102,7 @@ final class LocalDriver implements DriverInterface
         }
         if (!$recursive) {
             if (!@rmdir($path)) {
-                throw new FsException('Directory not empty: ' . $path);
+                throw new FsException(Lang::t('fs.not_empty', ['path' => $path]));
             }
 
             return;
@@ -114,21 +115,21 @@ final class LocalDriver implements DriverInterface
             $item->isDir() && !$item->isLink() ? @rmdir($item->getPathname()) : @unlink($item->getPathname());
         }
         if (!@rmdir($path)) {
-            throw new FsException('Cannot delete directory: ' . $path);
+            throw new FsException(Lang::t('fs.rmdir', ['path' => $path]));
         }
     }
 
     public function rename(string $from, string $to): void
     {
         if (!@rename($this->guard($from), $this->guard($to))) {
-            throw new FsException('Rename failed: ' . $from);
+            throw new FsException(Lang::t('fs.rename', ['path' => $from]));
         }
     }
 
     public function chmod(string $path, int $mode): void
     {
         if (!@chmod($this->guard($path), $mode)) {
-            throw new FsException('chmod failed: ' . $path);
+            throw new FsException(Lang::t('fs.chmod', ['path' => $path]));
         }
     }
 
@@ -136,7 +137,7 @@ final class LocalDriver implements DriverInterface
     {
         $handle = @fopen($this->guard($path), 'rb');
         if ($handle === false) {
-            throw new FsException('Cannot read: ' . $path);
+            throw new FsException(Lang::t('fs.read', ['path' => $path]));
         }
         Stream::prepare($handle);
 
@@ -148,7 +149,7 @@ final class LocalDriver implements DriverInterface
         $path = $this->guard($path);
         $out  = @fopen($path, $offset > 0 ? 'cb' : 'wb');
         if ($out === false) {
-            throw new FsException('Cannot write: ' . $path);
+            throw new FsException(Lang::t('fs.write', ['path' => $path]));
         }
         if ($offset > 0) {
             fseek($out, $offset);
@@ -175,7 +176,7 @@ final class LocalDriver implements DriverInterface
 
     public function describe(): string
     {
-        return 'Local filesystem';
+        return Lang::t('fs.local');
     }
 
     /** @return string[] the roots this driver may browse */
@@ -245,11 +246,11 @@ final class LocalDriver implements DriverInterface
     {
         $path = $path === '' ? $this->home() : Path::normalise($path);
         if (!$this->allowed($path)) {
-            throw new FsException('Path is outside the allowed local roots: ' . $path);
+            throw new FsException(Lang::t('fs.outside_roots', ['path' => $path]));
         }
         $real = realpath($path);
         if ($real !== false && !$this->allowed(Path::normalise($real))) {
-            throw new FsException('Path resolves outside the allowed local roots: ' . $path);
+            throw new FsException(Lang::t('fs.outside_resolved', ['path' => $path]));
         }
 
         return $path;

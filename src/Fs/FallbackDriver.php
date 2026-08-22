@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace FileBridge\Fs;
 
 use Closure;
+use FileBridge\Support\Lang;
 use Throwable;
 
 /**
@@ -135,6 +136,6 @@ final class FallbackDriver implements DriverInterface, ExecCapable
     {
         $this->connect();
 
-        return $this->active ?? throw new ConnectionException('No SFTP backend could connect.');
+        return $this->active ?? throw new ConnectionException(Lang::t('fs.ssh_no_backend'));
     }
 }
