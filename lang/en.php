@@ -45,6 +45,9 @@ return [
     'nav.queue'          => 'Queue',
     'nav.left'           => 'Left',
     'nav.right'          => 'Right',
+    // One-letter mount markers in the connection list - keep them short.
+    'nav.left_short'     => 'L',
+    'nav.right_short'    => 'R',
     'nav.unavailable'    => 'unavailable',
     'nav.ssh2'           => 'ext-ssh2 (fast)',
 

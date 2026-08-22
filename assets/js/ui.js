@@ -10,13 +10,26 @@ export function el(tag, attrs = {}, ...children) {
         else if (key === 'html') node.innerHTML = value;
         else if (key === 'text') node.textContent = value;
         else if (key === 'dataset') Object.assign(node.dataset, value);
-        else if (key === 'style') Object.assign(node.style, value);
+        else if (key === 'style') style(node, value);
         else if (key.startsWith('on')) node.addEventListener(key.slice(2).toLowerCase(), value);
         else node.setAttribute(key, value === true ? '' : String(value));
     }
     for (const child of children.flat()) {
         if (child === null || child === undefined || child === false) continue;
         node.append(child.nodeType ? child : document.createTextNode(String(child)));
+    }
+    return node;
+}
+
+/**
+ * Inline styles from a plain object. Custom properties have to go through
+ * setProperty - assigning `style['--x']` is silently dropped by the browser,
+ * which is how the per-connection colour used to disappear on its way to CSS.
+ */
+export function style(node, styles) {
+    for (const [name, value] of Object.entries(styles)) {
+        if (name.startsWith('--')) node.style.setProperty(name, value);
+        else node.style[name] = value;
     }
     return node;
 }

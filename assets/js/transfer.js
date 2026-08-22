@@ -1,6 +1,6 @@
 // Transfer queue drawer: enqueue, poll, render, cancel, retry.
 
-import { call } from './api.js';
+import { call, site as findSite } from './api.js';
 import { el, icon, $, bytes, speed, duration, when, toast, notifyError, modal } from './ui.js';
 import { transferDialog } from './dialogs.js';
 import { t } from './i18n.js';
@@ -15,6 +15,19 @@ const GLYPH = {
     error:     'alert',
     cancelled: 'stop',
 };
+
+/**
+ * A site name wearing its connection's colour, so a queue row says which two
+ * servers a job runs between without anyone reading the hostnames.
+ */
+function siteTag(id, name) {
+    const entry = findSite(id);
+    return el('span', {
+        class: 'site-tag',
+        style: entry?.colour ? { '--site-colour': entry.colour } : {},
+        text: name,
+    });
+}
 
 export class Queue {
     constructor(onFinished) {
@@ -202,9 +215,9 @@ export class Queue {
             el('div', { class: 'line1' },
                 el('span', { class: 'title', text: job.title }),
                 el('span', { class: 'route' },
-                    el('span', { text: job.sourceSiteName }),
+                    siteTag(job.sourceSite, job.sourceSiteName),
                     icon(job.mode === 'move' ? 'swap' : 'arrow-right', 'icon icon-sm'),
-                    el('span', { text: job.targetSiteName })),
+                    siteTag(job.targetSite, job.targetSiteName)),
                 el('span', { class: `badge ${job.status === 'error' ? 'badge-danger' : job.status === 'done' ? 'badge-ok' : job.status === 'cancelled' ? 'badge-warn' : 'badge-accent'}`, text: label }),
                 el('span', { class: 'muted mono', text: `${percent}%` })),
             actions,

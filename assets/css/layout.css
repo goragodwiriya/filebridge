@@ -204,10 +204,14 @@
     opacity: 1;
 }
 .site .mount {
+    flex: none;
+    padding: 1px 6px;
+    border-radius: 999px;
     font-size: 10px;
     font-weight: 700;
-    color: var(--accent);
     letter-spacing: .04em;
+    background: color-mix(in srgb, var(--site-colour) 22%, transparent);
+    color: var(--site-colour);
 }
 .sidebar-foot {
     padding: 10px 14px;
@@ -231,6 +235,8 @@
     background: var(--bg);
 }
 .panel {
+    /* panel.js swaps this for the mounted connection's colour. */
+    --site-colour: var(--accent);
     display: flex;
     flex-direction: column;
     min-height: 0;
@@ -250,12 +256,13 @@
     box-shadow: 0 0 0 1px var(--accent-line);
 }
 .panel.is-dropping {
-    border-color: var(--accent);
-    box-shadow: 0 0 0 2px var(--accent-soft) inset;
+    border-color: var(--site-colour);
+    box-shadow: 0 0 0 2px color-mix(in srgb, var(--site-colour) 25%, transparent) inset;
 }
 .panel-head {
+    border-top: 2px solid var(--site-colour);
     border-bottom: 1px solid var(--border);
-    background: var(--surface-2);
+    background: color-mix(in srgb, var(--site-colour) 7%, var(--surface-2));
 }
 .conn-row {
     display: flex;
@@ -263,7 +270,18 @@
     gap: 8px;
     padding: 8px 9px;
 }
+.conn-row .swatch {
+    width: 24px;
+    height: 24px;
+    flex: none;
+    display: grid;
+    place-items: center;
+    border-radius: 7px;
+    background: color-mix(in srgb, var(--site-colour) 20%, transparent);
+    color: var(--site-colour);
+}
 .conn-row .select {
+    border-color: color-mix(in srgb, var(--site-colour) 40%, var(--border));
     height: 30px;
     font-size: 12.5px;
     font-weight: 600;
@@ -737,6 +755,14 @@ table.files tbody tr.is-drop-target td {
     align-items: center;
     gap: 5px;
     white-space: nowrap;
+}
+.job .line1 .route .site-tag {
+    --site-colour: var(--muted);
+    padding: 1px 8px;
+    border-radius: 999px;
+    font-weight: 600;
+    background: color-mix(in srgb, var(--site-colour) 16%, transparent);
+    color: color-mix(in srgb, var(--site-colour) 70%, var(--text));
 }
 .job .line2 {
     display: flex;

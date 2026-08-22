@@ -44,6 +44,9 @@ return [
     'nav.queue'          => 'คิวงาน',
     'nav.left'           => 'ซ้าย',
     'nav.right'          => 'ขวา',
+    // ตัวย่อบอกว่าการเชื่อมต่อนี้เปิดอยู่แผงไหน - สั้นที่สุดเท่าที่อ่านออก
+    'nav.left_short'     => 'L',
+    'nav.right_short'    => 'R',
     'nav.unavailable'    => 'ใช้งานไม่ได้',
     'nav.ssh2'           => 'ext-ssh2 (เร็ว)',
 

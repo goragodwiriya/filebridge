@@ -15,6 +15,11 @@ const app = {
     mobileSide: 'left',
 };
 
+// Panel order as the screen shows it. The mount markers in the sidebar read
+// from this rather than from the key order of app.panels, so the first letter
+// is always the left panel.
+const SIDES = ['left', 'right'];
+
 // ── boot ─────────────────────────────────────────────────────────────────────
 
 async function boot() {
@@ -185,9 +190,7 @@ function renderBackendInfo() {
 function renderSites() {
     const list = $('#site-list');
     list.replaceChildren(...state.sites.map((entry) => {
-        const mounted = Object.entries(app.panels)
-            .filter(([, panel]) => panel.siteId === entry.id)
-            .map(([side]) => side[0].toUpperCase());
+        const mounted = SIDES.filter((side) => app.panels[side]?.siteId === entry.id);
 
         const node = el('li', {
             class: `site${mounted.length ? ' is-active' : ''}`,
@@ -203,7 +206,11 @@ function renderSites() {
         el('span', { class: 'meta' },
             el('span', { class: 'name', text: entry.name }),
             el('span', { class: 'where', text: entry.label })),
-        mounted.length ? el('span', { class: 'mount', text: mounted.join(' ') }) : null,
+        mounted.length ? el('span', {
+            class: 'mount',
+            text: mounted.map((side) => t(`nav.${side}_short`)).join(' '),
+            title: mounted.map((side) => t(`nav.${side}`)).join(' · '),
+        }) : null,
         el('span', { class: 'side' },
             entry.id === 'local' ? null : el('button', {
                 class: 'icon-btn', title: t('panel.edit_site'),
@@ -235,7 +242,7 @@ async function editSite(entry) {
     const saved = await siteDialog(entry);
     if (saved) {
         renderSites();
-        Object.values(app.panels).forEach((panel) => panel.fillSites());
+        Object.values(app.panels).forEach((panel) => { panel.fillSites(); panel.applySiteColour(); });
     }
 }
 
@@ -244,7 +251,7 @@ async function duplicateSite(entry) {
     const saved = await siteDialog(copy);
     if (saved) {
         renderSites();
-        Object.values(app.panels).forEach((panel) => panel.fillSites());
+        Object.values(app.panels).forEach((panel) => { panel.fillSites(); panel.applySiteColour(); });
     }
 }
 
@@ -260,6 +267,7 @@ async function deleteSite(entry) {
         Object.values(app.panels).forEach((panel) => {
             panel.fillSites();
             if (panel.siteId === entry.id) panel.connect('local');
+            else panel.applySiteColour();
         });
         toast(t('toast.site_removed'), entry.name, 'ok');
     } catch (error) { notifyError(error); }

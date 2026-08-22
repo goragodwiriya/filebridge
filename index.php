@@ -221,6 +221,7 @@ $i18n = [
     <section class="panel" tabindex="0">
         <div class="panel-head">
             <div class="conn-row">
+                <span class="swatch" data-el="swatch"><svg class="icon icon-sm"><use href="#i-server"></use></svg></span>
                 <span class="dot" data-el="dot"></span>
                 <select class="select" data-el="site"></select>
                 <span class="desc" data-el="desc"></span>

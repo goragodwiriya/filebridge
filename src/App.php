@@ -23,7 +23,7 @@ final class App
      * on every asset, so index.php, manifest.php and sw.php always agree on
      * which files belong together.
      */
-    public const VERSION = '1.4';
+    public const VERSION = '1.5';
 
     private static ?self $instance = null;
 

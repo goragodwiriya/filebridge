@@ -89,8 +89,23 @@ export class Panel {
         this.siteId = siteId;
         this.el.site.value = siteId;
         this.selected.clear();
+        this.applySiteColour();
         await this.load(path);
         this.ctx.onConnected?.(this);
+    }
+
+    /**
+     * Wear the connection's own colour. Both panels look alike otherwise, and
+     * deleting on the wrong server is the one mistake that cannot be undone -
+     * so the colour picked in the site dialog follows the connection from the
+     * sidebar into the head of whichever panel it is mounted in.
+     */
+    applySiteColour() {
+        const entry = findSite(this.siteId);
+        if (entry?.colour) this.root.style.setProperty('--site-colour', entry.colour);
+        else this.root.style.removeProperty('--site-colour');
+        this.el.swatch?.querySelector('use')
+            ?.setAttribute('href', entry?.protocol === 'local' ? '#i-hard-drive' : '#i-server');
     }
 
     async load(path = '', options = {}) {
