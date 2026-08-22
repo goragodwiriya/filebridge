@@ -62,9 +62,24 @@ final class HybridDriver implements DriverInterface, ExecCapable
         return $this->meta()->home();
     }
 
+    /**
+     * Names the backend the profile chose - the one that moves the bytes - not
+     * the phpseclib connection sitting behind the directory listing, which is
+     * an implementation detail nobody picked.
+     */
     public function describe(): string
     {
-        return $this->meta()->describe();
+        $meta = $this->meta();
+        if (!$meta instanceof SftpSeclibDriver || $meta->backend() === $this->backend()) {
+            return $meta->describe();
+        }
+
+        return 'SFTP - ' . $meta->serverId() . ' (' . $this->backend() . ')';
+    }
+
+    public function backend(): string
+    {
+        return $this->primary->backend();
     }
 
     // ------------------------------------------- single path work: chosen backend

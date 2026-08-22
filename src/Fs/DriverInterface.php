@@ -52,4 +52,10 @@ interface DriverInterface
 
     /** Short label describing the live connection, e.g. "SFTP - OpenSSH_9.6". */
     public function describe(): string;
+
+    /**
+     * The library or extension actually doing the work, e.g. "ext-ssh2".
+     * Answerable without a connection, so a label never opens one.
+     */
+    public function backend(): string;
 }

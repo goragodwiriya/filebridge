@@ -132,6 +132,12 @@ final class FallbackDriver implements DriverInterface, ExecCapable
         return $this->driver()->describe();
     }
 
+    /** The backend that won, or the one about to be tried. Never connects. */
+    public function backend(): string
+    {
+        return ($this->active ?? $this->preferred)->backend();
+    }
+
     private function driver(): DriverInterface
     {
         $this->connect();

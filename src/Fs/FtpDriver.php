@@ -250,6 +250,11 @@ final class FtpDriver implements DriverInterface
         return $this->banner;
     }
 
+    public function backend(): string
+    {
+        return 'ext-ftp';
+    }
+
     /** @param array<int,array<string,string>> $rows */
     private function fromMlsd(array $rows, string $dir): array
     {

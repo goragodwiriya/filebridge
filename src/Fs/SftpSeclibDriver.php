@@ -246,9 +246,20 @@ final class SftpSeclibDriver implements DriverInterface, ExecCapable
 
     public function describe(): string
     {
+        return 'SFTP - ' . $this->serverId() . ' (' . $this->backend() . ')';
+    }
+
+    public function backend(): string
+    {
+        return 'phpseclib';
+    }
+
+    /** The server's identification banner, or its host name when it offered none. */
+    public function serverId(): string
+    {
         $id = $this->sftp?->getServerIdentification();
 
-        return 'SFTP - ' . ($id !== false && $id !== null ? $id : $this->host) . ' (phpseclib)';
+        return $id !== false && $id !== null ? $id : $this->host;
     }
 
     /** Host identity as "SHA256:base64", matching ssh-keygen -l output. */

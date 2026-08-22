@@ -77,7 +77,7 @@ final class SftpSsh2Driver implements DriverInterface, ExecCapable
             throw new ConnectionException(Lang::t('fs.ssh_subsystem'));
         }
         $this->sftp   = $sftp;
-        $this->banner = 'SFTP - ' . $this->host . ' (ext-ssh2)';
+        $this->banner = 'SFTP - ' . $this->host . ' (' . $this->backend() . ')';
         $home         = @ssh2_sftp_realpath($sftp, '.');
         $this->home   = $this->startPath !== ''
             ? Path::normalise($this->startPath)
@@ -286,7 +286,12 @@ final class SftpSsh2Driver implements DriverInterface, ExecCapable
 
     public function describe(): string
     {
-        return $this->banner !== '' ? $this->banner : 'SFTP - ' . $this->host . ' (ext-ssh2)';
+        return $this->banner !== '' ? $this->banner : 'SFTP - ' . $this->host . ' (' . $this->backend() . ')';
+    }
+
+    public function backend(): string
+    {
+        return 'ext-ssh2';
     }
 
     private function wrap(string $path): string

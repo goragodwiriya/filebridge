@@ -179,6 +179,11 @@ final class LocalDriver implements DriverInterface
         return Lang::t('fs.local');
     }
 
+    public function backend(): string
+    {
+        return 'php';
+    }
+
     /** @return string[] the roots this driver may browse */
     public function roots(): array
     {
